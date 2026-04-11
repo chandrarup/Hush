@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VoiceFlow — Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --accent: #6b5ce7; --accent-bg: #f0eeff; --accent-dark: #5a4bd1;
+  --success: #34c759; --danger: #ff3b30; --warn: #ff9500;
+  --text-1: #111; --text-2: #555; --text-3: #999;
+  --border: #e8e8e8; --bg: #fafafa;
+  --font: 'Inter', -apple-system, sans-serif;
+  --radius: 14px;
+}
+html, body { height: 100%; font-family: var(--font); background: var(--bg); color: var(--text-1); -webkit-font-smoothing: antialiased; }
+
+.shell { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 16px; }
+
+/* Progress */
+.steps { display: flex; align-items: center; gap: 0; margin-bottom: 40px; }
+.step-dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); background: white; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--text-3); transition: all .3s; flex-shrink: 0; }
+.step-dot.active { border-color: var(--accent); background: var(--accent); color: white; }
+.step-dot.done { border-color: var(--success); background: var(--success); color: white; }
+.step-line { width: 48px; height: 2px; background: var(--border); transition: background .3s; }
+.step-line.done { background: var(--success); }
+
+/* Card */
+.card { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 40px 44px; width: 100%; max-width: 520px; box-shadow: 0 4px 24px rgba(0,0,0,.06); }
+
+/* Welcome */
+.logo-big { font-size: 48px; margin-bottom: 16px; }
+h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
+.subtitle { font-size: 15px; color: var(--text-2); line-height: 1.6; margin-bottom: 28px; }
+
+/* Permission rows */
+.perm-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+.perm-row {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+  transition: border-color .2s;
+}
+.perm-row.granted { border-color: var(--success); background: #f0fff4; }
+.perm-icon { font-size: 22px; flex-shrink: 0; }
+.perm-info { flex: 1; }
+.perm-name { font-size: 14px; font-weight: 600; }
+.perm-desc { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.perm-status { font-size: 20px; flex-shrink: 0; }
+.perm-btn { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); font-size: 12px; font-weight: 500; cursor: pointer; font-family: var(--font); background: white; color: var(--text-1); white-space: nowrap; transition: background .15s; flex-shrink: 0; }
+.perm-btn:hover { background: #f0f0f0; }
+.perm-btn:disabled { opacity: .4; cursor: default; }
+
+/* Inline instructions (shown after Open Settings is clicked) */
+.perm-guide { display: none; margin-top: 10px; }
+.perm-guide.visible { display: block; }
+.perm-guide-inner {
+  background: #fffbeb; border: 1px solid #f6d860;
+  border-radius: 8px; padding: 12px 14px;
+}
+.perm-guide h5 { font-size: 12px; font-weight: 700; color: #92700a; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.perm-guide ol { padding-left: 18px; }
+.perm-guide ol li { font-size: 12px; line-height: 1.7; color: #555; }
+.perm-guide ol li strong { color: #111; }
+.perm-guide .restart-warn {
+  margin-top: 8px; padding: 8px 10px;
+  background: #fff0f0; border: 1px solid #ffd0d0;
+  border-radius: 6px; font-size: 11.5px; color: #c0392b; font-weight: 500;
+}
+
+/* Hotkey picker */
+.key-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+.key-chip {
+  padding: 8px 16px; border-radius: 8px; border: 2px solid var(--border);
+  font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'SF Mono', monospace;
+  background: white; color: var(--text-1); transition: all .15s;
+}
+.key-chip:hover { border-color: #c4bcf5; background: var(--accent-bg); }
+.key-chip.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+
+/* Style cards */
+.level-mini-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; }
+.level-mini { border: 2px solid var(--border); border-radius: 10px; padding: 16px; cursor: pointer; transition: all .2s; }
+.level-mini:hover { border-color: #c4bcf5; }
+.level-mini.active { border-color: var(--accent); background: var(--accent-bg); }
+.level-mini h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.level-mini p { font-size: 11px; color: var(--text-3); line-height: 1.5; }
+.level-mini.active p { color: var(--text-2); }
+
+/* Ready */
+.ready-icon { font-size: 64px; text-align: center; margin-bottom: 16px; }
+.ready-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
+.ready-list li { font-size: 14px; color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+.ready-list li::before { content: '✓'; color: var(--success); font-weight: 700; }
+
+/* Footer buttons */
+.footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.btn { padding: 10px 22px; border-radius: 9px; border: 1px solid var(--border); font-size: 14px; font-weight: 500; cursor: pointer; font-family: var(--font); transition: all .15s; }
+.btn-secondary { background: white; color: var(--text-2); }
+.btn-secondary:hover { background: #f5f5f5; }
+.btn-primary { background: var(--accent); color: white; border-color: var(--accent); min-width: 130px; text-align: center; }
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-primary:disabled { opacity: .45; cursor: default; }
+.btn-big { width: 100%; padding: 14px; font-size: 15px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Step indicators -->
+  <div class="steps" id="step-indicators">
+    <div class="step-dot active" id="sd1">1</div>
+    <div class="step-line" id="sl1"></div>
+    <div class="step-dot" id="sd2">2</div>
+    <div class="step-line" id="sl2"></div>
+    <div class="step-dot" id="sd3">3</div>
+    <div class="step-line" id="sl3"></div>
+    <div class="step-dot" id="sd4">4</div>
+    <div class="step-line" id="sl4"></div>
+    <div class="step-dot" id="sd5">✓</div>
+  </div>
+
+  <!-- Step 1: Welcome -->
+  <div class="card" id="step1">
+    <div class="logo-big">🎙️</div>
+    <h1>Welcome to VoiceFlow</h1>
+    <p class="subtitle">Hold a key, speak naturally, release — polished text appears wherever your cursor is.<br><br>100% local. No cloud. No subscriptions.</p>
+    <button class="btn btn-primary btn-big" onclick="goTo(2)">Get started →</button>
+  </div>
+
+  <!-- Step 2: Permissions -->
+  <div class="card" id="step2" style="display:none">
+    <h1>Permissions</h1>
+    <p class="subtitle" style="margin-bottom:20px">VoiceFlow needs three permissions. Click <strong>Open Settings</strong> and follow the steps shown.</p>
+    <div class="perm-list">
+
+      <!-- Microphone -->
+      <div>
+        <div class="perm-row" id="pr-mic">
+          <span class="perm-icon">🎙</span>
+          <div class="perm-info">
+            <div class="perm-name">Microphone</div>
+            <div class="perm-desc">Required to hear your voice</div>
+          </div>
+          <span class="perm-status" id="ps-mic">⏳</span>
+          <button class="perm-btn" id="pb-mic" onclick="grantPerm('microphone')">Open Settings</button>
+        </div>
+        <div class="perm-guide" id="guide-mic">
+          <div class="perm-guide-inner">
+            <h5>📋 What to do in System Settings</h5>
+            <ol>
+              <li>System Settings opens to <strong>Privacy &amp; Security → Microphone</strong></li>
+              <li>Find <strong>Terminal</strong> (or <strong>Python</strong>) in the list</li>
+              <li>Toggle it <strong>ON</strong></li>
+              <li>Come back here — the ❌ will turn ✅ automatically</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Monitoring -->
+      <div>
+        <div class="perm-row" id="pr-im">
+          <span class="perm-icon">⌨️</span>
+          <div class="perm-info">
+            <div class="perm-name">Input Monitoring</div>
+            <div class="perm-desc">Required to detect your hotkey globally</div>
+          </div>
+          <span class="perm-status" id="ps-im">⏳</span>
+          <button class="perm-btn" id="pb-im" onclick="grantPerm('input_monitoring')">Open Settings</button>
+        </div>
+        <div class="perm-guide" id="guide-im">
+          <div class="perm-guide-inner">
+            <h5>📋 What to do in System Settings</h5>
+            <ol>
+              <li>System Settings opens to <strong>Privacy &amp; Security → Input Monitoring</strong></li>
+              <li>Click <strong>+</strong> if Terminal/Python is not listed, then add it</li>
+              <li>Toggle it <strong>ON</strong></li>
+            </ol>
+            <div class="restart-warn">⚠️ Input Monitoring needs a <strong>restart</strong> to take effect — VoiceFlow will restart automatically after setup.</div>
+            <button class="perm-btn" style="margin-top:10px;width:100%;background:#fff8e1;border-color:#f6d860;color:#92700a;font-weight:600" onclick="confirmIM()">✓ I've added it — continue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accessibility -->
+      <div>
+        <div class="perm-row" id="pr-acc">
+          <span class="perm-icon">♿</span>
+          <div class="perm-info">
+            <div class="perm-name">Accessibility</div>
+            <div class="perm-desc">Required to type into other apps</div>
+          </div>
+          <span class="perm-status" id="ps-acc">⏳</span>
+          <button class="perm-btn" id="pb-acc" onclick="grantPerm('accessibility')">Open Settings</button>
+        </div>
+        <div class="perm-guide" id="guide-acc">
+          <div class="perm-guide-inner">
+            <h5>📋 What to do in System Settings</h5>
+            <ol>
+              <li>System Settings opens to <strong>Privacy &amp; Security → Accessibility</strong></li>
+              <li>Click the <strong>+</strong> button if Terminal/Python is not listed</li>
+              <li>Find and add <strong>Terminal</strong> (or your Python app)</li>
+              <li>Toggle it <strong>ON</strong></li>
+              <li>Come back here — the ❌ will turn ✅ automatically</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="footer">
+      <button class="btn btn-secondary" onclick="goTo(1)">Back</button>
+      <button class="btn btn-primary" id="btn-perms-next" disabled onclick="goTo(3)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Hotkey -->
+  <div class="card" id="step3" style="display:none">
+    <h1>Choose your hotkey</h1>
+    <p class="subtitle" style="margin-bottom:20px">This key starts recording when held down. Pick one that's easy to reach.</p>
+    <div class="key-grid" id="key-grid">
+      <span class="key-chip" data-key="cmd_r">⌘ Right Cmd</span>
+      <span class="key-chip" data-key="cmd">⌘ Cmd</span>
+      <span class="key-chip active" data-key="ctrl_r">^ Right Ctrl</span>
+      <span class="key-chip" data-key="ctrl_l">^ Left Ctrl</span>
+      <span class="key-chip" data-key="alt_r">⌥ Right Alt</span>
+      <span class="key-chip" data-key="f9">F9</span>
+      <span class="key-chip" data-key="f10">F10</span>
+      <span class="key-chip" data-key="f12">F12</span>
+    </div>
+    <div class="footer">
+      <button class="btn btn-secondary" onclick="goTo(2)">Back</button>
+      <button class="btn btn-primary" onclick="saveHotkey(); goTo(4)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Step 4: Style -->
+  <div class="card" id="step4" style="display:none">
+    <h1>Choose your style</h1>
+    <p class="subtitle" style="margin-bottom:20px">How much should VoiceFlow clean up?<br>You can change this anytime in the dashboard.</p>
+    <div class="level-mini-grid">
+      <div class="level-mini" data-level="none">
+        <h4>None</h4>
+        <p>Exactly what you said, mistakes and all</p>
+      </div>
+      <div class="level-mini active" data-level="light">
+        <h4>Light ✦</h4>
+        <p>Removes fillers, fixes grammar only</p>
+      </div>
+      <div class="level-mini" data-level="medium">
+        <h4>Medium</h4>
+        <p>Improves clarity, mild rewording</p>
+      </div>
+      <div class="level-mini" data-level="high">
+        <h4>High</h4>
+        <p>Full polish and brevity</p>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="btn btn-secondary" onclick="goTo(3)">Back</button>
+      <button class="btn btn-primary" onclick="saveStyle(); goTo(5)">Continue →</button>
+    </div>
+  </div>
+
+  <!-- Step 5: Ready -->
+  <div class="card" id="step5" style="display:none">
+    <div class="ready-icon">🚀</div>
+    <h1>You're all set!</h1>
+    <p class="subtitle" style="margin-bottom:20px">VoiceFlow is running in your menu bar. Here's how to use it:</p>
+    <ul class="ready-list">
+      <li>Hold your hotkey and speak naturally</li>
+      <li>Release to transcribe and inject text</li>
+      <li>Right-click the menu bar icon to open the dashboard</li>
+      <li>Change your cleanup style anytime in the dashboard</li>
+    </ul>
+    <button class="btn btn-primary btn-big" onclick="complete()">Open Dashboard →</button>
+  </div>
+
+</div>
+<script>
+const API = 'http://localhost:57327';
+let currentStep = 1;
+let selectedKey = 'ctrl_r';
+let selectedLevel = 'light';
+let permPollTimer = null;
+
+function goTo(n) {
+  document.getElementById('step' + currentStep).style.display = 'none';
+  document.getElementById('step' + n).style.display = 'block';
+  // Update step dots
+  for (let i = 1; i <= 5; i++) {
+    const dot = document.getElementById('sd' + i);
+    if (!dot) continue;
+    dot.className = 'step-dot' + (i < n ? ' done' : i === n ? ' active' : '');
+  }
+  for (let i = 1; i <= 4; i++) {
+    const line = document.getElementById('sl' + i);
+    if (!line) continue;
+    line.className = 'step-line' + (i < n ? ' done' : '');
+  }
+  currentStep = n;
+  if (n === 2) startPermPoll();
+  else stopPermPoll();
+}
+
+// ── Permissions ───────────────────────────────────────────────────── //
+let imManuallyConfirmed = false;
+
+async function pollPerms() {
+  try {
+    const p = await fetch(API + '/permissions').then(r => r.json());
+    updatePermRow('mic', p.microphone);
+    updatePermRow('acc', p.accessibility);
+    // Input Monitoring: trust manual confirmation OR auto-detect
+    const imOK = p.input_monitoring || imManuallyConfirmed;
+    updatePermRow('im', imOK);
+    // Only mic + accessibility are hard requirements; IM check can be self-certified
+    const allOK = p.microphone && p.accessibility && imOK;
+    document.getElementById('btn-perms-next').disabled = !allOK;
+  } catch(e) {}
+}
+
+function updatePermRow(key, granted) {
+  const row = document.getElementById('pr-' + key);
+  const stat = document.getElementById('ps-' + key);
+  const btn  = document.getElementById('pb-' + key);
+  if (granted) {
+    row.classList.add('granted');
+    stat.textContent = '✅';
+    btn.disabled = true;
+  } else {
+    row.classList.remove('granted');
+    stat.textContent = '❌';
+    btn.disabled = false;
+  }
+}
+
+function startPermPoll() {
+  permPollTimer = setInterval(pollPerms, 1500);
+  pollPerms(); // immediate
+}
+function stopPermPoll() {
+  if (permPollTimer) { clearInterval(permPollTimer); permPollTimer = null; }
+}
+
+async function grantPerm(type) {
+  // Show inline instructions for this permission
+  const guideMap = { microphone: 'guide-mic', input_monitoring: 'guide-im', accessibility: 'guide-acc' };
+  const guideId = guideMap[type];
+  if (guideId) {
+    document.getElementById(guideId).classList.add('visible');
+  }
+  await fetch(API + '/permissions/open/' + type, { method: 'POST' });
+}
+
+function confirmIM() {
+  // User says they've added IM manually — trust them and mark as done
+  imManuallyConfirmed = true;
+  document.getElementById('pr-im').classList.add('granted');
+  document.getElementById('ps-im').textContent = '✅';
+  document.getElementById('pb-im').disabled = true;
+  document.getElementById('guide-im').classList.remove('visible');
+  // Re-run poll immediately to re-evaluate Continue button
+  pollPerms();
+}
+
+// ── Hotkey ────────────────────────────────────────────────────────── //
+document.querySelectorAll('.key-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.key-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    selectedKey = chip.dataset.key;
+  });
+});
+
+async function saveHotkey() {
+  try {
+    await fetch(API + '/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hotkey: selectedKey }),
+    });
+  } catch(e) {}
+}
+
+// ── Style ─────────────────────────────────────────────────────────── //
+document.querySelectorAll('.level-mini').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.level-mini').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    selectedLevel = card.dataset.level;
+  });
+});
+
+async function saveStyle() {
+  try {
+    await fetch(API + '/settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cleanup_level: selectedLevel }),
+    });
+  } catch(e) {}
+}
+
+// ── Complete ──────────────────────────────────────────────────────── //
+async function complete() {
+  try {
+    await fetch(API + '/onboarding/complete', { method: 'POST' });
+  } catch(e) {}
+  window.location.href = '/';
+}
+
+// Pre-select the hotkey that's already configured
+fetch(API + '/status').then(r => r.json()).then(s => {
+  const hk = s.hotkey || 'ctrl_r';
+  selectedKey = hk;
+  document.querySelectorAll('.key-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.key === hk);
+  });
+  const lvl = s.cleanup_level || 'light';
+  selectedLevel = lvl;
+  document.querySelectorAll('.level-mini').forEach(c => {
+    c.classList.toggle('active', c.dataset.level === lvl);
+  });
+}).catch(() => {});
+</script>
+</body>
+</html>
