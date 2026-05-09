@@ -15,16 +15,16 @@ This directory contains the native macOS rewrite scaffold for VoiceFlow.
 
 ```bash
 brew install xcodegen
-cd /home/runner/work/Hush/Hush
-xcodegen generate --spec /home/runner/work/Hush/Hush/native/VoiceFlowNative/project.yml
-open /home/runner/work/Hush/Hush/native/VoiceFlowNative/VoiceFlowNative.xcodeproj
+cd native/VoiceFlowNative
+xcodegen generate --spec project.yml
+open VoiceFlowNative.xcodeproj
 ```
 
 ## Build locally
 
 ```bash
 xcodebuild \
-  -project /home/runner/work/Hush/Hush/native/VoiceFlowNative/VoiceFlowNative.xcodeproj \
+  -project native/VoiceFlowNative/VoiceFlowNative.xcodeproj \
   -scheme VoiceFlowNative \
   -configuration Release \
   -destination 'platform=macOS' \
@@ -35,7 +35,7 @@ xcodebuild \
 ## Create DMG locally
 
 ```bash
-/home/runner/work/Hush/Hush/native/VoiceFlowNative/scripts/create_dmg.sh \
+native/VoiceFlowNative/scripts/create_dmg.sh \
   /tmp/VoiceFlowBuild/Build/Products/Release/VoiceFlow.app \
   /tmp/VoiceFlow.dmg
 ```

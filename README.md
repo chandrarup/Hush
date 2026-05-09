@@ -180,16 +180,16 @@ CAR-T
 
 This repository now includes a native macOS rewrite scaffold in:
 
-- `/home/runner/work/Hush/Hush/native/VoiceFlowNative/project.yml`
-- `/home/runner/work/Hush/Hush/native/README_NATIVE_XCODE.md`
+- `native/VoiceFlowNative/project.yml`
+- `native/README_NATIVE_XCODE.md`
 
 Use XcodeGen to generate and open a real Xcode project:
 
 ```bash
 brew install xcodegen
-cd /home/runner/work/Hush/Hush
-xcodegen generate --spec /home/runner/work/Hush/Hush/native/VoiceFlowNative/project.yml
-open /home/runner/work/Hush/Hush/native/VoiceFlowNative/VoiceFlowNative.xcodeproj
+cd native/VoiceFlowNative
+xcodegen generate --spec project.yml
+open VoiceFlowNative.xcodeproj
 ```
 
 The native scaffold includes:

@@ -15,7 +15,7 @@ final class PermissionService {
     func currentStatus() -> PermissionStatus {
         let micGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         let accessibilityGranted = AXIsProcessTrusted()
-        let inputMonitoringGranted = accessibilityGranted
+        let inputMonitoringGranted = preflightInputMonitoringPermission()
         return .init(microphone: micGranted, accessibility: accessibilityGranted, inputMonitoring: inputMonitoringGranted)
     }
 
@@ -32,5 +32,12 @@ final class PermissionService {
 
         guard let urlString = map[key], let url = URL(string: urlString) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func preflightInputMonitoringPermission() -> Bool {
+        if #available(macOS 10.15, *) {
+            return CGPreflightListenEventAccess()
+        }
+        return AXIsProcessTrusted()
     }
 }
