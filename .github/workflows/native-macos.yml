@@ -38,8 +38,9 @@ jobs:
         run: |
           APP_PATH="$GITHUB_WORKSPACE/build/Build/Products/Release/VoiceFlow.app"
           OUT_DIR="$GITHUB_WORKSPACE/dist"
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
           mkdir -p "$OUT_DIR"
-          "$GITHUB_WORKSPACE/native/VoiceFlowNative/scripts/create_dmg.sh" "$APP_PATH" "$OUT_DIR/VoiceFlow-${GITHUB_SHA::7}.dmg"
+          "$GITHUB_WORKSPACE/native/VoiceFlowNative/scripts/create_dmg.sh" "$APP_PATH" "$OUT_DIR/VoiceFlow-${SHORT_SHA}.dmg"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

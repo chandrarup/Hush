@@ -20,6 +20,7 @@ final class PasteboardTextInjector: TextInjecting {
         up?.flags = .maskCommand
 
         down?.post(tap: .cghidEventTap)
+        usleep(20_000)
         up?.post(tap: .cghidEventTap)
         return true
     }

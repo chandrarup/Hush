@@ -100,10 +100,16 @@ final class HistoryStore {
         var entries: [HistoryEntry] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             let id = sqlite3_column_int64(stmt, 0)
-            let ts = String(cString: sqlite3_column_text(stmt, 1))
-            let raw = String(cString: sqlite3_column_text(stmt, 2))
-            let clean = String(cString: sqlite3_column_text(stmt, 3))
-            let level = String(cString: sqlite3_column_text(stmt, 4))
+            guard let tsPtr = sqlite3_column_text(stmt, 1),
+                  let rawPtr = sqlite3_column_text(stmt, 2),
+                  let cleanPtr = sqlite3_column_text(stmt, 3),
+                  let levelPtr = sqlite3_column_text(stmt, 4) else {
+                continue
+            }
+            let ts = String(cString: tsPtr)
+            let raw = String(cString: rawPtr)
+            let clean = String(cString: cleanPtr)
+            let level = String(cString: levelPtr)
             let appName = sqlite3_column_text(stmt, 5).map { String(cString: $0) }
             entries.append(.init(id: id, timestampISO8601: ts, rawText: raw, cleanText: clean, cleanupLevel: level, appName: appName))
         }

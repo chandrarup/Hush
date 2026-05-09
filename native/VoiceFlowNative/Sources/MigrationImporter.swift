@@ -73,9 +73,14 @@ final class MigrationImporter {
         defer { sqlite3_finalize(stmt) }
 
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let raw = String(cString: sqlite3_column_text(stmt, 1))
-            let clean = String(cString: sqlite3_column_text(stmt, 2))
-            let level = String(cString: sqlite3_column_text(stmt, 3))
+            guard let rawPtr = sqlite3_column_text(stmt, 1),
+                  let cleanPtr = sqlite3_column_text(stmt, 2),
+                  let levelPtr = sqlite3_column_text(stmt, 3) else {
+                continue
+            }
+            let raw = String(cString: rawPtr)
+            let clean = String(cString: cleanPtr)
+            let level = String(cString: levelPtr)
             let appName = sqlite3_column_text(stmt, 4).map { String(cString: $0) }
             _ = historyStore.save(raw: raw, clean: clean, level: level, app: appName)
         }

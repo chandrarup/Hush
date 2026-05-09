@@ -56,9 +56,9 @@ final class AppCoordinator: ObservableObject {
                 notificationService.sendResult(raw: output.rawText, clean: output.cleanText)
                 state = .idle
                 if saveID < 0 {
-                    statusText = "Save failed; check logs"
+                    statusText = "Failed to save history (see Console.app)"
                 } else if !injected {
-                    statusText = "Inject failed; check Accessibility"
+                    statusText = "Text injection failed. Grant Accessibility permission in System Settings"
                 } else {
                     statusText = "Ready"
                 }

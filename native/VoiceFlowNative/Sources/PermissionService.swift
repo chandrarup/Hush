@@ -24,14 +24,23 @@ final class PermissionService {
     }
 
     func openPrivacyPane(_ key: String) {
-        let map: [String: String] = [
+        let settingsMap: [String: String] = [
             "microphone": "x-apple.systemsettings:com.apple.preference.security?Privacy_Microphone",
             "accessibility": "x-apple.systemsettings:com.apple.preference.security?Privacy_Accessibility",
             "input": "x-apple.systemsettings:com.apple.preference.security?Privacy_ListenEvent"
         ]
+        let preferencesMap: [String: String] = [
+            "microphone": "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+            "accessibility": "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+            "input": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+        ]
 
-        guard let urlString = map[key], let url = URL(string: urlString) else { return }
-        NSWorkspace.shared.open(url)
+        if let urlString = settingsMap[key], let url = URL(string: urlString), NSWorkspace.shared.open(url) {
+            return
+        }
+        if let fallback = preferencesMap[key], let url = URL(string: fallback) {
+            _ = NSWorkspace.shared.open(url)
+        }
     }
 
     private func preflightInputMonitoringPermission() -> Bool {
