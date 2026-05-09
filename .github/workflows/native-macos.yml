@@ -1,0 +1,48 @@
+name: native-macos-build
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+    paths:
+      - 'native/**'
+      - '.github/workflows/native-macos.yml'
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate --spec "$GITHUB_WORKSPACE/native/VoiceFlowNative/project.yml"
+
+      - name: Build native app
+        run: |
+          xcodebuild \
+            -project "$GITHUB_WORKSPACE/native/VoiceFlowNative/VoiceFlowNative.xcodeproj" \
+            -scheme VoiceFlowNative \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$GITHUB_WORKSPACE/build" \
+            build
+
+      - name: Package DMG
+        run: |
+          APP_PATH="$GITHUB_WORKSPACE/build/Build/Products/Release/VoiceFlow.app"
+          OUT_DIR="$GITHUB_WORKSPACE/dist"
+          mkdir -p "$OUT_DIR"
+          "$GITHUB_WORKSPACE/native/VoiceFlowNative/scripts/create_dmg.sh" "$APP_PATH" "$OUT_DIR/VoiceFlow-${GITHUB_SHA::7}.dmg"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: voiceflow-native
+          path: |
+            ${{ github.workspace }}/build/Build/Products/Release/VoiceFlow.app
+            ${{ github.workspace }}/dist/*.dmg
