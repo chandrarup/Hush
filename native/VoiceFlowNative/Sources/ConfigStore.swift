@@ -4,7 +4,8 @@ final class ConfigStore {
     private let fm = FileManager.default
 
     private var appSupportDirectory: URL {
-        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fm.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
         return base.appendingPathComponent("VoiceFlow", isDirectory: true)
     }
 

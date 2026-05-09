@@ -15,14 +15,19 @@ final class HistoryStore {
     }
 
     private var dbPath: String {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
         let dir = base.appendingPathComponent("VoiceFlow", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("history.db").path
     }
 
     private func openDatabase() {
-        sqlite3_open(dbPath, &db)
+        let rc = sqlite3_open(dbPath, &db)
+        if rc != SQLITE_OK {
+            let msg = db.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "unknown sqlite error"
+            print("[native-history] sqlite open failed: \(msg)")
+        }
     }
 
     private func createTableIfNeeded() {
@@ -36,7 +41,11 @@ final class HistoryStore {
           app TEXT
         );
         """
-        sqlite3_exec(db, sql, nil, nil, nil)
+        let rc = sqlite3_exec(db, sql, nil, nil, nil)
+        if rc != SQLITE_OK {
+            let msg = db.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "unknown sqlite error"
+            print("[native-history] sqlite schema init failed: \(msg)")
+        }
     }
 
     @discardableResult

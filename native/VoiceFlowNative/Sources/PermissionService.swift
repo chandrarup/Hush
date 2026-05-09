@@ -35,9 +35,6 @@ final class PermissionService {
     }
 
     private func preflightInputMonitoringPermission() -> Bool {
-        if #available(macOS 10.15, *) {
-            return CGPreflightListenEventAccess()
-        }
-        return AXIsProcessTrusted()
+        CGPreflightListenEventAccess()
     }
 }
