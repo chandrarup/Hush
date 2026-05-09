@@ -13,6 +13,6 @@ final class NotificationService {
 
     private func truncate(_ text: String, max: Int = 60) -> String {
         guard text.count > max else { return text }
-        return String(text.prefix(max - 1)) + "…"
+        return String(text.prefix(max)) + "…"
     }
 }

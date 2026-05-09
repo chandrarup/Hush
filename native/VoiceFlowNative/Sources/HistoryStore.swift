@@ -1,9 +1,11 @@
 import Foundation
 import SQLite3
+import OSLog
 
 final class HistoryStore {
     private var db: OpaquePointer?
     private let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    private let logger = Logger(subsystem: "com.voiceflow.app", category: "HistoryStore")
 
     init() {
         openDatabase()
@@ -26,7 +28,7 @@ final class HistoryStore {
         let rc = sqlite3_open(dbPath, &db)
         if rc != SQLITE_OK {
             let msg = db.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "unknown sqlite error"
-            print("[native-history] sqlite open failed: \(msg)")
+            logger.error("sqlite open failed: \(msg)")
         }
     }
 
@@ -44,7 +46,7 @@ final class HistoryStore {
         let rc = sqlite3_exec(db, sql, nil, nil, nil)
         if rc != SQLITE_OK {
             let msg = db.flatMap { sqlite3_errmsg($0) }.map { String(cString: $0) } ?? "unknown sqlite error"
-            print("[native-history] sqlite schema init failed: \(msg)")
+            logger.error("sqlite schema init failed: \(msg)")
         }
     }
 
@@ -52,17 +54,32 @@ final class HistoryStore {
     func save(raw: String, clean: String, level: String, app: String?) -> Int64 {
         let sql = "INSERT INTO entries(ts, raw, clean, level, app) VALUES(?,?,?,?,?);"
         var stmt: OpaquePointer?
-        sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
-        sqlite3_bind_text(stmt, 1, ns(isoNow), -1, sqliteTransient)
-        sqlite3_bind_text(stmt, 2, ns(raw), -1, sqliteTransient)
-        sqlite3_bind_text(stmt, 3, ns(clean), -1, sqliteTransient)
-        sqlite3_bind_text(stmt, 4, ns(level), -1, sqliteTransient)
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            logger.error("sqlite prepare failed for insert")
+            return -1
+        }
+        guard sqlite3_bind_text(stmt, 1, ns(isoNow), -1, sqliteTransient) == SQLITE_OK,
+              sqlite3_bind_text(stmt, 2, ns(raw), -1, sqliteTransient) == SQLITE_OK,
+              sqlite3_bind_text(stmt, 3, ns(clean), -1, sqliteTransient) == SQLITE_OK,
+              sqlite3_bind_text(stmt, 4, ns(level), -1, sqliteTransient) == SQLITE_OK else {
+            logger.error("sqlite bind failed for insert")
+            sqlite3_finalize(stmt)
+            return -1
+        }
         if let app {
-            sqlite3_bind_text(stmt, 5, ns(app), -1, sqliteTransient)
+            guard sqlite3_bind_text(stmt, 5, ns(app), -1, sqliteTransient) == SQLITE_OK else {
+                logger.error("sqlite bind failed for app column")
+                sqlite3_finalize(stmt)
+                return -1
+            }
         } else {
             sqlite3_bind_null(stmt, 5)
         }
-        sqlite3_step(stmt)
+        guard sqlite3_step(stmt) == SQLITE_DONE else {
+            logger.error("sqlite step failed for insert")
+            sqlite3_finalize(stmt)
+            return -1
+        }
         sqlite3_finalize(stmt)
         return sqlite3_last_insert_rowid(db)
     }
@@ -70,8 +87,15 @@ final class HistoryStore {
     func fetch(limit: Int = 200) -> [HistoryEntry] {
         let sql = "SELECT id, ts, raw, clean, level, app FROM entries ORDER BY id DESC LIMIT ?;"
         var stmt: OpaquePointer?
-        sqlite3_prepare_v2(db, sql, -1, &stmt, nil)
-        sqlite3_bind_int(stmt, 1, Int32(limit))
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+            logger.error("sqlite prepare failed for fetch")
+            return []
+        }
+        guard sqlite3_bind_int(stmt, 1, Int32(limit)) == SQLITE_OK else {
+            logger.error("sqlite bind failed for fetch limit")
+            sqlite3_finalize(stmt)
+            return []
+        }
 
         var entries: [HistoryEntry] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
