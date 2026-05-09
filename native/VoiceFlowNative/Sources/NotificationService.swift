@@ -11,8 +11,8 @@ final class NotificationService {
         UNUserNotificationCenter.current().add(req)
     }
 
-    private func truncate(_ text: String, max: Int = 60) -> String {
-        guard text.count > max else { return text }
-        return String(text.prefix(max)) + "…"
+    private func truncate(_ text: String, maxCharacters: Int = 60) -> String {
+        guard text.count > maxCharacters else { return text }
+        return String(text.prefix(maxCharacters)) + "…"
     }
 }

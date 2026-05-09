@@ -58,16 +58,16 @@ final class HistoryStore {
             logger.error("sqlite prepare failed for insert")
             return -1
         }
-        guard sqlite3_bind_text(stmt, 1, ns(isoNow), -1, sqliteTransient) == SQLITE_OK,
-              sqlite3_bind_text(stmt, 2, ns(raw), -1, sqliteTransient) == SQLITE_OK,
-              sqlite3_bind_text(stmt, 3, ns(clean), -1, sqliteTransient) == SQLITE_OK,
-              sqlite3_bind_text(stmt, 4, ns(level), -1, sqliteTransient) == SQLITE_OK else {
+        guard sqlite3_bind_text(stmt, 1, toCString(isoNow), -1, sqliteTransient) == SQLITE_OK,
+              sqlite3_bind_text(stmt, 2, toCString(raw), -1, sqliteTransient) == SQLITE_OK,
+              sqlite3_bind_text(stmt, 3, toCString(clean), -1, sqliteTransient) == SQLITE_OK,
+              sqlite3_bind_text(stmt, 4, toCString(level), -1, sqliteTransient) == SQLITE_OK else {
             logger.error("sqlite bind failed for insert")
             sqlite3_finalize(stmt)
             return -1
         }
         if let app {
-            guard sqlite3_bind_text(stmt, 5, ns(app), -1, sqliteTransient) == SQLITE_OK else {
+            guard sqlite3_bind_text(stmt, 5, toCString(app), -1, sqliteTransient) == SQLITE_OK else {
                 logger.error("sqlite bind failed for app column")
                 sqlite3_finalize(stmt)
                 return -1
@@ -116,7 +116,7 @@ final class HistoryStore {
         ISO8601DateFormatter().string(from: Date())
     }
 
-    private func ns(_ value: String) -> UnsafePointer<Int8>? {
+    private func toCString(_ value: String) -> UnsafePointer<Int8>? {
         (value as NSString).utf8String
     }
 }

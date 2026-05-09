@@ -51,11 +51,17 @@ final class AppCoordinator: ObservableObject {
             do {
                 let output = try await pipeline.stopRecordingAndTranscribe()
                 latestOutput = output
-                _ = historyStore.save(raw: output.rawText, clean: output.cleanText, level: config.cleanupLevel, app: NSWorkspace.shared.frontmostApplication?.localizedName)
-                _ = textInjector.inject(output.cleanText)
+                let saveID = historyStore.save(raw: output.rawText, clean: output.cleanText, level: config.cleanupLevel, app: NSWorkspace.shared.frontmostApplication?.localizedName)
+                let injected = textInjector.inject(output.cleanText)
                 notificationService.sendResult(raw: output.rawText, clean: output.cleanText)
                 state = .idle
-                statusText = "Ready"
+                if saveID < 0 {
+                    statusText = "Saved failed; check logs"
+                } else if !injected {
+                    statusText = "Inject failed; check Accessibility"
+                } else {
+                    statusText = "Ready"
+                }
             } catch {
                 state = .failed
                 statusText = "Pipeline failed"

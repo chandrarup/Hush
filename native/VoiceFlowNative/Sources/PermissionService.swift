@@ -25,9 +25,9 @@ final class PermissionService {
 
     func openPrivacyPane(_ key: String) {
         let map: [String: String] = [
-            "microphone": "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-            "accessibility": "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-            "input": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+            "microphone": "x-apple.systemsettings:com.apple.preference.security?Privacy_Microphone",
+            "accessibility": "x-apple.systemsettings:com.apple.preference.security?Privacy_Accessibility",
+            "input": "x-apple.systemsettings:com.apple.preference.security?Privacy_ListenEvent"
         ]
 
         guard let urlString = map[key], let url = URL(string: urlString) else { return }
