@@ -1,0 +1,72 @@
+version: "2"
+reviews:
+  profile: "assertive"
+  instructions: |
+    The absolute primary goal and core architecture of this project is:
+    ---
+    VoiceFlow is a push-to-talk speech-to-text dictation product. The user holds a
+    hotkey (or equivalent control on mobile), speaks, and releases; polished text
+    is returned and inserted into the focused field with very low latency.
+
+    Current state (starting point, not a forever constraint):
+    - Desktop Python app, primarily macOS today.
+    - Local pipeline: warm audio capture → VAD silence trim → ASR (Parakeet on
+      Apple Silicon, faster-whisper fallback) → LLM cleanup/composition
+      (Docker llama.cpp, then Ollama, then rules_clean) → inject text → notify.
+    - Dual modes: Dictate (transcribe + clean) and Commander (speak intent,
+      compose a ready-to-send message).
+    - Supporting pieces: ~/.voiceflow config/vocab/history, loopback FastAPI
+      dashboard, tray icon, onboarding/permissions, install.sh / .command / DMG.
+
+    Intended evolution (this IS the project goal — do not treat it as scope creep):
+    1. Cross-platform: extend beyond macOS to Windows, Linux, and later mobile
+       (Android; iOS if it appears). Device-specific capture/injection is expected.
+       Prefer abstractions (audio, ASR, LLM, inject, hotkey, permissions) over
+       scattering sys.platform checks. Preserve a working macOS path while adding others.
+    2. Easy setup / installation: one-command or installer UX, fewer manual
+       dependency steps, clear first-run onboarding, sensible defaults, graceful
+       missing-dependency behavior. Packaging, installers, and setup docs are in scope.
+    3. Latency: keep the hotkey/record path non-blocking; warm or reuse audio/model
+       connections; short-utterance fast paths; tight timeouts with fallback;
+       streaming or partial results if they reduce time-to-text. Measure and call
+       out regressions in capture, ASR, LLM, network RTT, and injection.
+    4. Cloud migration (course requirement): evolve from fully local processing to
+       an edge+cloud architecture — record on device, send audio (or features) to a
+       hosted service, process ASR/LLM in the cloud, return cleaned text with low
+       latency to laptops and mobiles. Cloud APIs, hosted inference, auth, and
+       multi-device clients are in scope and desirable. Do NOT reject PRs for adding
+       cloud/network APIs; review them for correctness, latency, security, and
+       fallback when the network/service is unavailable.
+    5. Software design: improve modularity, clear interfaces, separation of
+       pipeline stages, testability, config vs. code, error handling, and
+       consistent patterns. Refactors that enable cross-platform and cloud without
+       breaking the dictation UX are encouraged.
+    6. Security and hardening: treat audio/transcripts as sensitive. For cloud
+       paths require TLS, authentication, least-privilege tokens, no secrets in
+       repo, validated inputs, loopback-only for any local admin UI unless
+       explicitly authenticated, and safe injection (don't silently exfiltrate
+       clipboard/keystrokes). Flag secrets, plaintext credentials, open binds,
+       and missing auth on new network surfaces.
+    7. Optimization: CPU/GPU/memory, model size vs. quality, batching/streaming,
+       and install size — without making setup harder.
+
+    Product contract to preserve while the architecture evolves:
+    - Hold-to-talk (or equivalent) → speak → release → text appears in context.
+    - Commander mode remains "speak intent, inject composed message."
+    - Prefer graceful degradation over crashes (missing VAD, ASR, LLM, network,
+      or injection method should fall back and still try to deliver text).
+    - User data (config, history, vocab) stays out of git. Never commit secrets,
+      models, or virtualenvs.
+    - Local-only processing may remain as a mode or fallback; it is not the
+      only allowed architecture.
+
+    When reviewing, prioritize: (a) latency impact, (b) setup/install simplicity,
+    (c) cross-platform correctness, (d) security of any new network/cloud path,
+    (e) design-principle improvements, (f) whether the dictation UX still works.
+    Comment on drift from THIS roadmap, not from "must stay 100% local."
+    ---
+
+    CRITICAL DRIFT DETECTION RULES:
+    1. You MUST review and comment on ALL pull requests automatically as soon as they are committed, even if the PR content drifts or deviates from the project goal.
+    2. Do not abort or skip reviews.
+    3. If you detect that the PR code, design pattern, or scope is drifting away from the stated project goal, you MUST add a high-level review comment explaining exactly how it deviates and suggest how to realign it.
