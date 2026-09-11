@@ -21,14 +21,6 @@ echo "  ║   VoiceFlow Installer  v1.0   ║"
 echo "  ╚═══════════════════════════════╝"
 echo ""
 
-if [[ "$REPO_DIR" == /Volumes/* ]]; then
-  echo -e "${RED}Error: You are running from inside the DMG (Read-Only).${NC}"
-  echo -e "${YELLOW}Please drag the VoiceFlow folder to your Desktop or Applications folder first, then run install.sh from there.${NC}"
-  echo ""
-  exit 1
-fi
-
-
 # ── 1. Check Python ────────────────────────────────────────────────── #
 info "Checking Python..."
 if ! command -v python3 &>/dev/null; then
@@ -39,20 +31,33 @@ if ! command -v python3 &>/dev/null; then
   fi
   brew install python3
 fi
-PY=$(command -v python3.11 || command -v python3.12 || command -v python3)
+PY=$(command -v python3.12 || command -v python3.11 || command -v python3)
 PYVER=$("$PY" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 ok "Python $PYVER found at $PY"
 
-# ── 2. Create virtualenv ───────────────────────────────────────────── #
-info "Creating virtual environment..."
-"$PY" -m venv "$VENV"
+# ── 2. Check uv ─────────────────────────────────────────────────────── #
+info "Checking uv..."
+if ! command -v uv &>/dev/null; then
+  if command -v brew &>/dev/null; then
+    brew install uv
+  else
+    echo -e "${RED}Error: uv is not installed and Homebrew is unavailable.${NC}"
+    echo "Install uv from https://docs.astral.sh/uv/getting-started/installation/"
+    exit 1
+  fi
+fi
+UV_BIN="$(command -v uv)"
+ok "uv $($UV_BIN --version | awk '{print $2}') found at $UV_BIN"
+
+# ── 3. Create and sync the application environment ─────────────────── #
+info "Creating virtual environment with uv..."
+"$UV_BIN" venv --python "$PY" "$VENV"
 ok "Virtualenv created at $VENV"
 
-# ── 3. Install dependencies ────────────────────────────────────────── #
-info "Installing dependencies (may take a few minutes on first run)..."
-"$VENV/bin/pip" install --upgrade pip -q
-"$VENV/bin/pip" install -r "$REPO_DIR/requirements.txt" -q
-ok "Dependencies installed"
+# Install the optional Parakeet engine on macOS; Whisper remains the fallback.
+info "Syncing application dependencies with uv (may take a few minutes)..."
+"$UV_BIN" sync --project "$REPO_DIR" --python "$PY" --extra parakeet --no-dev -q
+ok "Application dependencies installed"
 
 # ── 4. Check Ollama ───────────────────────────────────────────────── #
 info "Checking Ollama..."
@@ -90,7 +95,7 @@ temperature    = 0.1
 max_tokens     = 500
 
 [injection]
-method = "quartz"   # quartz | clipboard | pyautogui
+method = "auto"     # auto | quartz | clipboard | pyautogui
 
 [ui]
 show_notification     = true
@@ -104,14 +109,6 @@ fi
 
 # ── 6. Create launcher ────────────────────────────────────────────── #
 info "Creating launcher script..."
-
-# Auto-detect compiled vs source
-if [ -f "$REPO_DIR/main.pyc" ]; then
-  ENTRY="main.pyc"
-else
-  ENTRY="main.py"
-fi
-
 cat > "$LAUNCH_SCRIPT" << EOF
 #!/usr/bin/env bash
 # VoiceFlow launcher — double-click or run from terminal
@@ -121,7 +118,7 @@ if command -v ollama &>/dev/null && ! pgrep -x ollama &>/dev/null; then
   ollama serve &>/dev/null &
   sleep 1
 fi
-exec "$VENV/bin/python" "$REPO_DIR/$ENTRY"
+exec "$VENV/bin/python" -m voiceflow.app.main
 EOF
 chmod +x "$LAUNCH_SCRIPT"
 ok "Launcher created: $LAUNCH_SCRIPT"
@@ -137,7 +134,8 @@ cat > "$LAUNCH_AGENT" << EOF
   <key>ProgramArguments</key>
   <array>
     <string>$VENV/bin/python</string>
-    <string>$REPO_DIR/$ENTRY</string>
+    <string>-m</string>
+    <string>voiceflow.app.main</string>
   </array>
   <key>WorkingDirectory</key> <string>$REPO_DIR</string>
   <key>RunAtLoad</key>        <true/>

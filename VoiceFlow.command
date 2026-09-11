@@ -19,4 +19,4 @@ if command -v ollama &>/dev/null && ! pgrep -x ollama &>/dev/null; then
 fi
 
 cd "$SCRIPT_DIR"
-exec "$VENV/bin/python" main.py
+exec "$VENV/bin/python" -m voiceflow.app.main

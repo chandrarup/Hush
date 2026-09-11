@@ -29,9 +29,10 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 | Component | Purpose |
 |-----------|---------|
 | Python 3.10+ | Runtime |
+| [uv](https://docs.astral.sh/uv/) | Application environment and dependency manager |
 | [Ollama](https://ollama.com) | Local LLM server |
 | PortAudio | Audio I/O backend |
-| librosa | Required for Parakeet ASR on Apple Silicon |
+| librosa (Parakeet extra) | Required for Parakeet ASR on Apple Silicon |
 | xdotool (Linux) | Text injection |
 
 ---
@@ -40,7 +41,8 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 
 For a complete machine setup checklist, including macOS Input Monitoring,
 Accessibility, Microphone permissions, Python.app selection, and diagnostics,
-see [SETUP.md](SETUP.md).
+see [docs/setup.md](docs/setup.md). The platform architecture is documented in
+[docs/architecture.md](docs/architecture.md).
 
 ### 1. Install Ollama
 
@@ -60,31 +62,50 @@ Start the Ollama server (keep this running in the background):
 ollama serve
 ```
 
-### 2. Run the setup script
+### 2. Install uv
+
+VoiceFlow uses [uv](https://docs.astral.sh/uv/) to manage its application
+environment. Install it once if it is not already available:
 
 ```bash
-cd voiceflow
-bash setup.sh
+# macOS with Homebrew
+brew install uv
+
+# Linux or other supported platforms
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-This will:
-- Install system dependencies (PortAudio, xdotool on Linux)
-- Install all Python packages
-- Create `~/.voiceflow/config.toml` with defaults
-- Create `~/.voiceflow/vocab.txt` (empty)
-- Pull the `llama3.2:3b` model via Ollama
+### 3. Run the installer
 
-### 3. Launch VoiceFlow
+On macOS, use the project installer. It creates the virtual environment,
+installs dependencies, configures the LaunchAgent, and prints the required
+privacy-permission paths:
 
 ```bash
-python main.py
+bash install.sh
+```
+
+For Ubuntu/Debian, the equivalent cross-platform helper is:
+
+```bash
+bash scripts/setup_cross_platform.sh
+```
+
+Both setup paths use `uv` to create or update the application environment,
+create the `~/.voiceflow` files, and prepare the local LLM. The macOS installer
+is the recommended path for this repository.
+
+### 4. Launch VoiceFlow
+
+```bash
+uv run --no-dev python -m voiceflow.app.main
 ```
 
 On first launch, Whisper will download the `large-v3-turbo` model (~1.5 GB). This only happens once; it is cached in `~/.cache/huggingface/`.
 
 ---
 
-## Manual Installation (without setup.sh)
+## Manual Installation (without an installer)
 
 ```bash
 # macOS
@@ -93,8 +114,13 @@ brew install portaudio
 # Ubuntu/Debian
 sudo apt-get install portaudio19-dev xdotool libnotify-bin
 
-# Python deps
-pip install -r requirements.txt
+# Install uv once if needed: https://docs.astral.sh/uv/getting-started/installation/
+
+# Python application dependencies
+# macOS: include the Parakeet accelerator path
+uv sync --extra parakeet --no-dev
+# Linux/Windows: Whisper-only default
+# uv sync --no-dev
 
 # Ollama model
 ollama pull llama3.2:3b
@@ -127,7 +153,7 @@ temperature = 0.1
 max_tokens = 500
 
 [injection]
-method = "quartz"          # quartz | clipboard | pyautogui | xdotool
+method = "auto"            # auto | quartz | clipboard | pyautogui | xdotool
 
 [ui]
 show_notification = true
@@ -139,7 +165,7 @@ dashboard_port = 57327
 
 | Engine | Best for | Notes |
 |--------|----------|-------|
-| `auto` | Recommended | Uses Parakeet on macOS when available, otherwise Whisper |
+| `auto` | Recommended | Uses Parakeet when an accelerator is available, otherwise Whisper |
 | `parakeet` | Apple Silicon speed | Requires `transformers`, `torch`, and `librosa` |
 | `whisper` | Compatibility | Uses `faster-whisper` and supports more languages |
 
@@ -193,8 +219,8 @@ CAR-T
 - Grant **Microphone** for recording:
   `System Settings → Privacy & Security → Microphone`
 - If `.venv/bin/python` is greyed out in the macOS picker, run
-  `python check_permission.py` and add the resolved `Python.app` bundle instead.
-- See [SETUP.md](SETUP.md) for the full step-by-step permission flow.
+  `python -m voiceflow.diagnostics.permission_diagnostic` and add the resolved `Python.app` bundle instead.
+- See [docs/setup.md](docs/setup.md) for the full step-by-step permission flow.
 
 ---
 
@@ -202,19 +228,55 @@ CAR-T
 
 ```
 voiceflow/
-├── main.py          # Entry point — wires everything together
-├── audio.py         # Push-to-talk recording (sounddevice)
-├── vad.py           # Silence trimming (webrtcvad)
-├── transcriber.py   # ASR (faster-whisper)
-├── cleaner.py       # LLM text cleanup (ollama)
-├── injector.py      # Text injection (xdotool / clipboard / pyautogui)
-├── tray.py          # System tray icon (pystray + Pillow)
-├── notifier.py      # Desktop notification (plyer)
-├── config.py        # Config loader (~/.voiceflow/config.toml)
-├── setup.sh         # One-command setup
-├── requirements.txt
-└── README.md
+├── app/
+│   └── main.py              # Application orchestration and runtime entry point
+├── config/
+│   ├── defaults.py           # Default configuration values
+│   └── loader.py             # User config and vocabulary loading
+├── prompts/
+│   └── cleanup.py            # Versioned LLM prompt catalog
+├── core/
+│   ├── audio.py             # Push-to-talk recording
+│   ├── vad.py               # Voice-activity detection and silence trimming
+│   ├── transcriber.py       # Parakeet/Whisper ASR strategies
+│   ├── cleaner.py           # LLM transcript cleanup
+│   └── history.py            # SQLite transcription history
+├── platform/
+│   ├── factory.py             # Central OS detection and backend routing
+│   ├── contracts.py           # Stable platform capability interfaces
+│   ├── adapters.py            # macOS/Linux/Windows/generic bundles
+│   └── backends/              # Concrete OS adapters by capability
+├── web/
+│   ├── api_server.py          # Local FastAPI dashboard server
+│   └── ui/                    # Dashboard and onboarding pages
+└── diagnostics/
+    ├── permission_diagnostic.py # Interpreter and permission diagnostics
+    └── hotkey_diagnostic.py     # Global keyboard event diagnostics
+
+docs/
+├── setup.md                    # Detailed installation and macOS permissions
+└── architecture.md             # Runtime boundaries and platform design
+
+pyproject.toml                  # Application dependencies and tool settings
+uv.lock                         # Reproducible resolved dependency set
+
+packaging/
+├── build_dmg.sh                # DMG build helper
+└── setup_app.py                # Optional py2app configuration
+
+scripts/
+└── setup_cross_platform.sh     # Linux/macOS helper for development setups
 ```
+
+The root `main.py` is only a thin launcher; implementation code lives under
+the `voiceflow/` package. `VoiceFlow.command` is the double-click launcher and
+`install.sh` is the canonical macOS installer.
+
+`pyproject.toml` is the application manifest. VoiceFlow is an executable
+application, not a reusable Python package, so it sets `tool.uv.package = false`.
+`uv.lock` records the resolved dependency versions. Use `uv sync` to prepare the
+environment and `uv run` to execute commands inside it; do not install this
+repository with `pip` or `pip install -e .`.
 
 ---
 
@@ -222,7 +284,7 @@ voiceflow/
 
 **"No module named sounddevice"**
 ```bash
-pip install sounddevice
+uv sync --no-dev
 # macOS: brew install portaudio first
 ```
 
