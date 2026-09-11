@@ -68,7 +68,7 @@ class AudioRecorder:
     def start(self):
         """Open the input stream and begin collecting audio.
 
-        Opens a fresh stream each time so macOS can hand us the currently
+        Opens a fresh stream each time so the operating system can hand us the
         active input device (handles headphone plug/unplug gracefully).
         """
         if self._stream is not None:

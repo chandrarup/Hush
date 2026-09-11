@@ -260,10 +260,9 @@ def _start_listener():
     """
     Start pynput keyboard listener.
 
-    On macOS with Anaconda, lst.start() can hang if called from a thread that
-    has no CFRunLoop.  The reliable fix is to call lst.start() from the MAIN
-    thread before handing the main thread to pystray, but since pystray must
-    own the main thread we instead use a RunLoop-aware approach:
+    Some desktop keyboard backends require their listener to be created from
+    the process' main thread. Start the listener before handing the main loop
+    to the tray implementation so each platform adapter can own its event loop:
 
     We create the Listener and call lst.start() while still on the main thread
     (before tray.run_blocking), then the keepalive loop runs in a daemon thread.
@@ -390,7 +389,7 @@ def main():
     print(f"[main] LLM    : {docker_url}")
     print("\n[main] ✓ Ready — hold hotkey to record, release to transcribe.")
     print("[main] Right-click the menu bar icon to Quit.")
-    print("[main] (If hotkey does nothing, grant Input Monitoring in System Settings)\n")
+    print("[main] (If hotkey does nothing, check keyboard/input permission for the launcher)\n")
 
     # ── Start API server ──────────────────────────────────────────────
     ui_cfg = _config.get("ui", {})
@@ -403,7 +402,7 @@ def main():
         ollama_model=_config.get("llm", {}).get("ollama_model", "llama3.2:3b"),
     )
 
-    # ── Tray runs on main thread (macOS requirement) ───────────────────
+    # ── Tray owns the main thread where required by the desktop backend ──
     tray = _platform.tray.get_tray()
     tray.setup(on_quit=lambda: os._exit(0), dashboard_port=dashboard_port)
 
