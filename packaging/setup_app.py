@@ -1,6 +1,9 @@
 """
 setup_app.py — py2app configuration for VoiceFlow.
-Usage: python packaging/setup_app.py py2app
+Usage: uv run --group build --extra parakeet python packaging/setup_app.py py2app
+
+Build dependencies are managed by uv. Run the command above from the repository
+root after syncing the build group.
 
 NOTE: py2app with PyTorch produces a ~5-8 GB bundle.
 This is best used for creating a signed .app for the Mac App Store
@@ -61,7 +64,6 @@ setup(
     app=APP,
     data_files=DATA,
     options={'py2app': OPTIONS},
-    setup_requires=['py2app'],
     name='VoiceFlow',
     version='1.0.0',
 )

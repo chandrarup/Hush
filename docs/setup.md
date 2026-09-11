@@ -2,7 +2,7 @@
 
 This file is the full setup checklist for running VoiceFlow on a new machine.
 It includes the macOS privacy permissions that are easy to miss during a normal
-`pip install`.
+application dependency setup.
 
 VoiceFlow needs three separate things to work:
 
@@ -35,6 +35,19 @@ only print the exact paths to add and run diagnostics afterward.
 
 ## 2. Install System Dependencies
 
+Install uv before creating the application environment. It is the only Python
+environment/dependency tool used by this repository.
+
+### uv
+
+```bash
+# macOS with Homebrew
+brew install uv
+
+# Linux or other supported platforms
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
 ### macOS
 
 Install Homebrew first if needed: https://brew.sh
@@ -50,35 +63,40 @@ cleanup. Python 3.12 is a good known-working runtime for this project.
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-pip python3-dev gcc portaudio19-dev xdotool libnotify-bin python3-tk
+sudo apt-get install -y python3-dev gcc portaudio19-dev xdotool libnotify-bin python3-tk
 curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-## 3. Create The Python Environment
+## 3. Create The Python Environment With uv
+
+`pyproject.toml` is the source of truth for the VoiceFlow application. It keeps
+runtime, optional Parakeet, development, and packaging dependencies separate.
+`tool.uv.package = false` intentionally tells uv that this is an executable
+application, not a library that should be installed into site-packages.
 
 On macOS, prefer Python 3.12 if available:
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+uv venv --python 3.12 .venv
+uv sync --extra parakeet --no-dev
 ```
 
 On Linux:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+uv sync --no-dev
 ```
 
 Notes:
 
-- `librosa` is required for the Parakeet ASR path used on Apple Silicon.
+- `uv sync` creates or updates `.venv` and installs the exact versions recorded
+  in `uv.lock`; no manual activation is required when using `uv run`.
+- `librosa` (0.10.x/0.11.x) is required for the Parakeet ASR path used on Apple
+  Silicon.
 - `setuptools<81` is required because `webrtcvad` still imports `pkg_resources`.
-- `pytest` is included so the repository smoke tests work after setup.
+- The `dev` dependency group contains pytest and is installed only for tests.
+- The `build` dependency group contains py2app and is installed only when
+  creating a macOS application bundle.
 
 ## 4. Set Up Ollama
 
@@ -103,8 +121,7 @@ The app creates `~/.voiceflow/config.toml` and `~/.voiceflow/vocab.txt` on first
 startup. To create them without launching the whole app:
 
 ```bash
-source .venv/bin/activate
-python -c 'from voiceflow.config import load_config; load_config()'
+uv run --no-dev python -c 'from voiceflow.config import load_config; load_config()'
 ```
 
 The current macOS defaults should include:
@@ -150,8 +167,7 @@ they are symlinks. Use the real Python app bundle instead.
 First print the exact paths macOS is checking:
 
 ```bash
-source .venv/bin/activate
-python -m voiceflow.diagnostics.permission_diagnostic
+uv run --no-dev python -m voiceflow.diagnostics.permission_diagnostic
 ```
 
 Look for:
@@ -216,8 +232,7 @@ access. The permission usually appears after the first attempt to record.
 Run:
 
 ```bash
-source .venv/bin/activate
-python -m voiceflow.diagnostics.hotkey_diagnostic
+uv run --no-dev python -m voiceflow.diagnostics.hotkey_diagnostic
 ```
 
 Press the Control key and a few other keys.
@@ -244,8 +259,7 @@ of `Key.ctrl_r`. The app treats `ctrl`, `ctrl_l`, and `ctrl_r` as equivalent.
 Parakeet on Apple Silicon:
 
 ```bash
-source .venv/bin/activate
-python -c 'from voiceflow.core.transcriber import create_transcriber; t=create_transcriber(engine="parakeet"); print(type(t).__name__)'
+uv run --no-dev --extra parakeet python -c 'from voiceflow.core.transcriber import create_transcriber; t=create_transcriber(engine="parakeet"); print(type(t).__name__)'
 ```
 
 Expected:
@@ -260,27 +274,25 @@ The first run may download model files from Hugging Face and cache them under
 If Parakeet cannot start, the app falls back to Whisper:
 
 ```bash
-python -c 'from voiceflow.core.transcriber import create_transcriber; t=create_transcriber(engine="whisper"); print(type(t).__name__)'
+uv run --no-dev python -c 'from voiceflow.core.transcriber import create_transcriber; t=create_transcriber(engine="whisper"); print(type(t).__name__)'
 ```
 
 ## 9. Run Tests
 
 ```bash
-source .venv/bin/activate
-python -m pytest
+uv run --group dev pytest
 ```
 
 Expected:
 
 ```text
-2 passed
+3 passed
 ```
 
 ## 10. Launch VoiceFlow
 
 ```bash
-source .venv/bin/activate
-python -m voiceflow.app.main
+uv run --no-dev python -m voiceflow.app.main
 ```
 
 Expected startup signs:
@@ -308,7 +320,7 @@ Then the app should transcribe and inject text into the focused input field.
 Run:
 
 ```bash
-python -m voiceflow.diagnostics.hotkey_diagnostic
+uv run --no-dev python -m voiceflow.diagnostics.hotkey_diagnostic
 ```
 
 If no key events appear, fix Input Monitoring. Add Terminal, ChatGPT/Codex, and
@@ -345,16 +357,16 @@ System Settings -> Privacy & Security -> Microphone
 
 ### Parakeet Falls Back To Whisper
 
-Install dependencies again:
+Synchronize the optional ASR dependencies again:
 
 ```bash
-python -m pip install -r requirements.txt
+uv sync --extra parakeet --no-dev
 ```
 
 Then run:
 
 ```bash
-python -c 'import librosa; print(librosa.__version__)'
+uv run --no-dev --extra parakeet python -c 'import librosa; print(librosa.__version__)'
 ```
 
 If model files are missing, rerun the Parakeet check from section 8 with network
@@ -363,10 +375,10 @@ access.
 ### `webrtcvad` Warns About `pkg_resources`
 
 This project pins `setuptools<81` because `webrtcvad` imports `pkg_resources`.
-Reinstall requirements if the warning becomes an import error:
+Synchronize the locked environment if the warning becomes an import error:
 
 ```bash
-python -m pip install -r requirements.txt
+uv sync --no-dev
 ```
 
 ### Ollama Is Unreachable

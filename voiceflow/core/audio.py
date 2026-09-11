@@ -28,7 +28,7 @@ class AudioRecorder:
     def __init__(self, sample_rate: int = SAMPLE_RATE, channels: int = CHANNELS):
         if sd is None:
             raise RuntimeError(
-                "sounddevice is not installed. Run: pip install sounddevice"
+                "sounddevice is not installed. Run: uv sync --no-dev"
             )
         self.sample_rate = sample_rate
         self.channels = channels

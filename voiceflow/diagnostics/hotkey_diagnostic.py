@@ -13,7 +13,7 @@ def main() -> None:
 
         print("[diag] pynput imported OK")
     except ImportError:
-        print("[diag] FATAL: pynput not installed. Run: python -m pip install pynput")
+        print("[diag] FATAL: pynput not installed. Run: uv sync --no-dev")
         sys.exit(1)
 
     def on_press(key):

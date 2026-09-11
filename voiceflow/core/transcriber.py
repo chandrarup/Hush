@@ -5,12 +5,12 @@ Engine A: NVIDIA Parakeet TDT 0.6B v3  (BEST for English on Apple Silicon)
   - 10× faster than Whisper large-v3-turbo
   - Higher accuracy (WER 6.32% vs 7.44%)
   - Runs on Apple Silicon GPU via MPS backend
-  - Requires: pip install torch transformers
+  - Requires: uv sync --extra parakeet --no-dev
 
 Engine B: faster-whisper  (fallback, supports 100+ languages)
   - Good multilingual support
   - Runs on CPU (int8) or CUDA GPU (float16)
-  - Requires: pip install faster-whisper
+  - Requires: uv sync --no-dev
 
 Config controls which engine is used:
   [asr]
@@ -78,7 +78,7 @@ class ParakeetTranscriber:
         if not _TRANSFORMERS_AVAILABLE:
             raise RuntimeError(
                 "transformers/torch not installed.\n"
-                "Run: pip install torch transformers"
+                "Run: uv sync --extra parakeet --no-dev"
             )
 
         device = _best_torch_device()
@@ -133,7 +133,7 @@ class WhisperTranscriber:
     ):
         if not _FASTER_WHISPER_AVAILABLE:
             raise RuntimeError(
-                "faster-whisper not installed. Run: pip install faster-whisper"
+                "faster-whisper not installed. Run: uv sync --no-dev"
             )
 
         self.language = language

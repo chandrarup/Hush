@@ -44,7 +44,6 @@ elif [[ "$OS" == "Linux" ]]; then
     echo ">>> Detected Linux"
     sudo apt-get update -qq
     sudo apt-get install -y \
-        python3-pip \
         portaudio19-dev \
         xdotool \
         libnotify-bin \
@@ -56,18 +55,32 @@ else
     echo "WARNING: Unknown OS '$OS'. Proceeding anyway..."
 fi
 
-# ── Python dependencies ───────────────────────────────────────────────────── #
+# ── uv and Python dependencies ────────────────────────────────────────────── #
 echo ""
-echo ">>> Installing Python dependencies..."
+echo ">>> Checking uv..."
 
-# Prefer pip3 if available
-PIP="pip3"
-if ! command -v pip3 &>/dev/null; then
-    PIP="pip"
+if ! command -v uv &>/dev/null; then
+    if command -v brew &>/dev/null; then
+        brew install uv
+    elif command -v curl &>/dev/null; then
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+    fi
 fi
 
-$PIP install --upgrade pip --quiet
-$PIP install -r "$REPO_DIR/requirements.txt"
+UV_BIN="$(command -v uv || true)"
+if [ -z "$UV_BIN" ] && [ -x "$HOME/.local/bin/uv" ]; then
+    UV_BIN="$HOME/.local/bin/uv"
+fi
+if [ -z "$UV_BIN" ]; then
+    echo "ERROR: uv is required. Install it from https://docs.astral.sh/uv/getting-started/installation/"
+    exit 1
+fi
+
+SYNC_ARGS=(--project "$REPO_DIR" --no-dev)
+if [[ "$OS" == "Darwin" ]]; then
+    SYNC_ARGS+=(--extra parakeet)
+fi
+"$UV_BIN" sync "${SYNC_ARGS[@]}"
 
 # ── Config directory & files ──────────────────────────────────────────────── #
 echo ""
@@ -140,7 +153,7 @@ echo "║  Setup complete!                        ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 echo "  Run VoiceFlow:"
-echo "    python -m voiceflow.app.main"
+echo "    uv run --project \"$REPO_DIR\" --no-dev python -m voiceflow.app.main"
 echo ""
 echo "  Usage:"
 echo "    • Hold Right Ctrl (default) to start recording"

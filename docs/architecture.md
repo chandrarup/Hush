@@ -31,6 +31,24 @@ PlatformServices  <-- stable capability contracts
 - `voiceflow/platform/backends/common/` contains implementations reusable by
   more than one platform, such as the tray and clipboard helpers.
 
+## Application dependency management
+
+VoiceFlow is distributed and operated as a desktop application, not as a
+library or SDK. `pyproject.toml` is therefore an application manifest rather
+than a package-publishing configuration, and `tool.uv.package = false` prevents
+uv from installing the repository itself as a Python package.
+
+- Runtime dependencies live in the main project dependency list.
+- Parakeet dependencies are an optional `parakeet` extra for Apple Silicon or
+  users who explicitly want that ASR engine.
+- Test-only dependencies are in the `dev` dependency group.
+- py2app packaging dependencies are in the `build` dependency group.
+- `uv.lock` is committed so setup and CI resolve the same versions.
+
+Use `uv sync` to create or update `.venv` and `uv run` to execute application,
+diagnostic, and test commands. The installers and documentation intentionally
+do not maintain a second `requirements.txt` or invoke pip directly.
+
 ## Design patterns
 
 ### Strategy

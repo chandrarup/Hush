@@ -1,0 +1,63 @@
+[project]
+name = "voiceflow-app"
+version = "1.0.0"
+description = "Local push-to-talk speech-to-text desktop application"
+requires-python = ">=3.10"
+dependencies = [
+    # ASR fallback and audio pipeline
+    "faster-whisper>=1.0.0",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    "webrtcvad>=2.0.10",
+    "setuptools<81",
+
+    # Global hotkeys and portable text injection
+    "pynput>=1.7.6",
+    "pyperclip>=1.8.2",
+    "pyautogui>=0.9.54",
+
+    # Local LLM providers and configuration
+    "ollama>=0.2.0",
+    "requests>=2.31.0",
+    "toml>=0.10.2",
+
+    # Tray, notifications, and dashboard
+    "pystray>=0.19.4",
+    "Pillow>=10.0.0",
+    "plyer>=2.1.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "aiofiles>=23.2.1",
+
+    # Native macOS text injection; ignored on other operating systems.
+    "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
+    "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
+]
+
+[project.optional-dependencies]
+parakeet = [
+    "transformers>=4.40.0",
+    "torch>=2.2.0",
+    # 0.10.x/0.11.x supports the application's Python 3.10+ range.
+    "librosa>=0.10.2,<1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+]
+build = [
+    "py2app>=0.28.8",
+]
+
+[tool.uv]
+# VoiceFlow is an executable application, not a distributable Python package.
+package = false
+
+[tool.pytest.ini_options]
+addopts = "-v"
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+log_cli_level = "INFO"

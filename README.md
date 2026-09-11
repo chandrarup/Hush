@@ -29,9 +29,10 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 | Component | Purpose |
 |-----------|---------|
 | Python 3.10+ | Runtime |
+| [uv](https://docs.astral.sh/uv/) | Application environment and dependency manager |
 | [Ollama](https://ollama.com) | Local LLM server |
 | PortAudio | Audio I/O backend |
-| librosa | Required for Parakeet ASR on Apple Silicon |
+| librosa (Parakeet extra) | Required for Parakeet ASR on Apple Silicon |
 | xdotool (Linux) | Text injection |
 
 ---
@@ -61,7 +62,20 @@ Start the Ollama server (keep this running in the background):
 ollama serve
 ```
 
-### 2. Run the installer
+### 2. Install uv
+
+VoiceFlow uses [uv](https://docs.astral.sh/uv/) to manage its application
+environment. Install it once if it is not already available:
+
+```bash
+# macOS with Homebrew
+brew install uv
+
+# Linux or other supported platforms
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 3. Run the installer
 
 On macOS, use the project installer. It creates the virtual environment,
 installs dependencies, configures the LaunchAgent, and prints the required
@@ -77,14 +91,14 @@ For Ubuntu/Debian, the equivalent cross-platform helper is:
 bash scripts/setup_cross_platform.sh
 ```
 
-Both setup paths install Python packages, create the `~/.voiceflow` files, and
-prepare the local LLM. The macOS installer is the recommended path for this
-repository.
+Both setup paths use `uv` to create or update the application environment,
+create the `~/.voiceflow` files, and prepare the local LLM. The macOS installer
+is the recommended path for this repository.
 
-### 3. Launch VoiceFlow
+### 4. Launch VoiceFlow
 
 ```bash
-python -m voiceflow.app.main
+uv run --no-dev python -m voiceflow.app.main
 ```
 
 On first launch, Whisper will download the `large-v3-turbo` model (~1.5 GB). This only happens once; it is cached in `~/.cache/huggingface/`.
@@ -100,8 +114,13 @@ brew install portaudio
 # Ubuntu/Debian
 sudo apt-get install portaudio19-dev xdotool libnotify-bin
 
-# Python deps
-pip install -r requirements.txt
+# Install uv once if needed: https://docs.astral.sh/uv/getting-started/installation/
+
+# Python application dependencies
+# macOS: include the Parakeet accelerator path
+uv sync --extra parakeet --no-dev
+# Linux/Windows: Whisper-only default
+# uv sync --no-dev
 
 # Ollama model
 ollama pull llama3.2:3b
@@ -235,7 +254,11 @@ voiceflow/
     └── hotkey_diagnostic.py     # Global keyboard event diagnostics
 
 docs/
-└── setup.md                    # Detailed installation and macOS permissions
+├── setup.md                    # Detailed installation and macOS permissions
+└── architecture.md             # Runtime boundaries and platform design
+
+pyproject.toml                  # Application dependencies and tool settings
+uv.lock                         # Reproducible resolved dependency set
 
 packaging/
 ├── build_dmg.sh                # DMG build helper
@@ -249,13 +272,19 @@ The root `main.py` is only a thin launcher; implementation code lives under
 the `voiceflow/` package. `VoiceFlow.command` is the double-click launcher and
 `install.sh` is the canonical macOS installer.
 
+`pyproject.toml` is the application manifest. VoiceFlow is an executable
+application, not a reusable Python package, so it sets `tool.uv.package = false`.
+`uv.lock` records the resolved dependency versions. Use `uv sync` to prepare the
+environment and `uv run` to execute commands inside it; do not install this
+repository with `pip` or `pip install -e .`.
+
 ---
 
 ## Troubleshooting
 
 **"No module named sounddevice"**
 ```bash
-pip install sounddevice
+uv sync --no-dev
 # macOS: brew install portaudio first
 ```
 
