@@ -15,6 +15,10 @@ VOCAB_PATH = CONFIG_DIR / "vocab.txt"
 DEFAULT_CONFIG = {
     "hotkey": {
         "key": "ctrl_r",
+        # Commander mode key — hold to compose a full message from spoken intent.
+        # e.g. say "ask him if he completed his task" → injects "Did you complete the task?"
+        # Set to "" to disable.
+        "commander_key": "alt_r",
     },
     "asr": {
         # engine: "auto" | "parakeet" | "whisper"

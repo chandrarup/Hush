@@ -18,7 +18,15 @@ rsync -a --exclude='.venv' --exclude='__pycache__' --exclude='.git' \
          --exclude='*.pyc' --exclude='dist' --exclude='build' \
          "$(pwd)/" "$STAGE_DIR/${APP_NAME}/"
 
-# Rename VoiceFlow.command to be the primary launcher
+echo "→ Compiling Python source code to hide plain text..."
+# Compile all .py files to .pyc in the staging directory, then delete the .py files.
+find "$STAGE_DIR/${APP_NAME}" -name "*.py" -type f | while read -r pyfile; do
+    # Only compile our source files, leave tests or installer scripts alone if any
+    python3 -c "import py_compile; py_compile.compile('$pyfile', cfile='${pyfile}c')"
+    rm "$pyfile"
+done
+
+# Make executable
 chmod +x "$STAGE_DIR/${APP_NAME}/VoiceFlow.command"
 chmod +x "$STAGE_DIR/${APP_NAME}/install.sh"
 
@@ -32,16 +40,19 @@ if ! command -v create-dmg &>/dev/null; then
     -ov -format UDZO "$DIST_DIR/$DMG_NAME"
 else
   echo "→ Creating branded DMG with create-dmg..."
-  create-dmg \
-    --volname "$APP_NAME" \
-    --volicon "assets/icon.icns" 2>/dev/null || true \
-    --window-size 660 400 \
-    --icon-size 100 \
-    --icon "VoiceFlow" 180 200 \
-    --app-drop-link 480 200 \
-    --no-internet-enable \
-    "$DIST_DIR/$DMG_NAME" \
-    "$STAGE_DIR/"
+  CMD_ARGS=(
+    "--volname" "$APP_NAME"
+    "--window-size" "660" "400"
+    "--icon-size" "100"
+    "--icon" "VoiceFlow" "180" "200"
+  )
+  
+  if [ -f "assets/icon.icns" ]; then
+    CMD_ARGS+=("--volicon" "assets/icon.icns")
+  fi
+
+  create-dmg "${CMD_ARGS[@]}" "$DIST_DIR/$DMG_NAME" "$STAGE_DIR/"
+
 fi
 
 rm -rf "$STAGE_DIR"

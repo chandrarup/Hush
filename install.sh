@@ -21,6 +21,14 @@ echo "  ║   VoiceFlow Installer  v1.0   ║"
 echo "  ╚═══════════════════════════════╝"
 echo ""
 
+if [[ "$REPO_DIR" == /Volumes/* ]]; then
+  echo -e "${RED}Error: You are running from inside the DMG (Read-Only).${NC}"
+  echo -e "${YELLOW}Please drag the VoiceFlow folder to your Desktop or Applications folder first, then run install.sh from there.${NC}"
+  echo ""
+  exit 1
+fi
+
+
 # ── 1. Check Python ────────────────────────────────────────────────── #
 info "Checking Python..."
 if ! command -v python3 &>/dev/null; then
@@ -96,6 +104,14 @@ fi
 
 # ── 6. Create launcher ────────────────────────────────────────────── #
 info "Creating launcher script..."
+
+# Auto-detect compiled vs source
+if [ -f "$REPO_DIR/main.pyc" ]; then
+  ENTRY="main.pyc"
+else
+  ENTRY="main.py"
+fi
+
 cat > "$LAUNCH_SCRIPT" << EOF
 #!/usr/bin/env bash
 # VoiceFlow launcher — double-click or run from terminal
@@ -105,7 +121,7 @@ if command -v ollama &>/dev/null && ! pgrep -x ollama &>/dev/null; then
   ollama serve &>/dev/null &
   sleep 1
 fi
-exec "$VENV/bin/python" main.py
+exec "$VENV/bin/python" "$REPO_DIR/$ENTRY"
 EOF
 chmod +x "$LAUNCH_SCRIPT"
 ok "Launcher created: $LAUNCH_SCRIPT"
@@ -121,7 +137,7 @@ cat > "$LAUNCH_AGENT" << EOF
   <key>ProgramArguments</key>
   <array>
     <string>$VENV/bin/python</string>
-    <string>$REPO_DIR/main.py</string>
+    <string>$REPO_DIR/$ENTRY</string>
   </array>
   <key>WorkingDirectory</key> <string>$REPO_DIR</string>
   <key>RunAtLoad</key>        <true/>
