@@ -69,6 +69,13 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 
 /* ── Main ─────────────────────────────────────────────── */
 .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.topbar {
+  height: 56px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 0 24px;
+  background: var(--content-bg); border-bottom: 1px solid var(--border);
+}
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
 .page { display: none; flex: 1; overflow-y: auto; padding: 32px 40px; }
 .page.active { display: flex; flex-direction: column; }
 
@@ -210,6 +217,44 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+
+/* ── Theme toggle ─────────────────────────────────────── */
+.theme-toggle {
+  width: auto; padding: 8px 10px; margin: 0;
+  border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--text-2);
+  font: 500 12px var(--font); text-align: left; cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.theme-toggle:hover { background: #ebebeb; color: var(--text-1); }
+
+html[data-theme="dark"] {
+  --sidebar-bg: #1b1b1b;
+  --content-bg: #111111;
+  --border: #333333;
+  --text-1: #f2f2f2;
+  --text-2: #c4c4c4;
+  --text-3: #8f8f8f;
+  --accent-bg: #2c2750;
+  --card-shadow: 0 1px 3px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.2);
+}
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .theme-toggle:hover { background: #2a2a2a; }
+html[data-theme="dark"] .stats-bar,
+html[data-theme="dark"] .entry-diff,
+html[data-theme="dark"] .settings-row { background: #1b1b1b; }
+html[data-theme="dark"] .entry-app { background: #2a2a2a; }
+html[data-theme="dark"] .btn,
+html[data-theme="dark"] .settings-control select,
+html[data-theme="dark"] .settings-control input,
+html[data-theme="dark"] .hotkey-display,
+html[data-theme="dark"] .level-card { background: #1b1b1b; color: var(--text-1); }
+html[data-theme="dark"] .btn:hover,
+html[data-theme="dark"] .search-bar:focus { background: #242424; }
+html[data-theme="dark"] .search-bar { background: #1b1b1b; color: var(--text-1); }
+html[data-theme="dark"] .level-preview { background: #24203a; }
+html[data-theme="dark"] .level-card.active .level-preview { background: var(--accent-bg); }
+html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
 </style>
 </head>
 <body>
@@ -247,6 +292,11 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 
   <!-- Main -->
   <div class="main">
+    <header class="topbar" aria-label="Global controls">
+      <div class="topbar-actions">
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="false">☾ Dark mode</button>
+      </div>
+    </header>
 
     <!-- Home page -->
     <div class="page active" id="page-home">
@@ -403,6 +453,24 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 
 <script>
 const API = 'http://localhost:57327';
+
+// ── Theme ────────────────────────────────────────────────────────── //
+const THEME_STORAGE_KEY = 'voiceflow-theme';
+const themeToggle = document.getElementById('theme-toggle');
+
+function applyTheme(theme) {
+  const isDark = theme === 'dark';
+  document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+  themeToggle.textContent = isDark ? '☀ Light mode' : '☾ Dark mode';
+  themeToggle.setAttribute('aria-pressed', String(isDark));
+  themeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+  localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'dark' : 'light');
+}
+
+applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'light');
+themeToggle.addEventListener('click', () => {
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+});
 
 // ── Navigation ──────────────────────────────────────────────────── //
 document.querySelectorAll('.nav-item').forEach(el => {
