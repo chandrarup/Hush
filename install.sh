@@ -82,7 +82,7 @@ temperature    = 0.1
 max_tokens     = 500
 
 [injection]
-method = "quartz"   # quartz | clipboard | pyautogui
+method = "auto"     # auto | quartz | clipboard | pyautogui
 
 [ui]
 show_notification     = true
@@ -105,7 +105,7 @@ if command -v ollama &>/dev/null && ! pgrep -x ollama &>/dev/null; then
   ollama serve &>/dev/null &
   sleep 1
 fi
-exec "$VENV/bin/python" main.py
+exec "$VENV/bin/python" -m voiceflow.app.main
 EOF
 chmod +x "$LAUNCH_SCRIPT"
 ok "Launcher created: $LAUNCH_SCRIPT"
@@ -121,7 +121,8 @@ cat > "$LAUNCH_AGENT" << EOF
   <key>ProgramArguments</key>
   <array>
     <string>$VENV/bin/python</string>
-    <string>$REPO_DIR/main.py</string>
+    <string>-m</string>
+    <string>voiceflow.app.main</string>
   </array>
   <key>WorkingDirectory</key> <string>$REPO_DIR</string>
   <key>RunAtLoad</key>        <true/>

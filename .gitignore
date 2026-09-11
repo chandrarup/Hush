@@ -41,6 +41,7 @@ build/
 
 # ── Test & coverage ──────────────────────────────────────────────────────────
 .pytest_cache/
+.benchmarks/
 .coverage
 htmlcov/
 *.log
