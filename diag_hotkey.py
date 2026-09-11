@@ -53,8 +53,9 @@ listener.start()
 trusted = getattr(listener, 'IS_TRUSTED', None)
 if trusted is False:
     print("!" * 60)
-    print("⚠  IS_TRUSTED = False — macOS will block ALL key events")
-    print("   Grant Input Monitoring permission and restart.")
+    print("⚠  IS_TRUSTED = False — macOS may block key events")
+    print("   If PRESS/RELEASE lines still appear, pynput is receiving events.")
+    print("   If no key lines appear, grant Input Monitoring and restart.")
     print("!" * 60 + "\n")
 elif trusted is True:
     print(f"✓ IS_TRUSTED = True — permission granted, events should flow\n")

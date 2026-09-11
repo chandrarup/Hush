@@ -31,11 +31,16 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 | Python 3.10+ | Runtime |
 | [Ollama](https://ollama.com) | Local LLM server |
 | PortAudio | Audio I/O backend |
+| librosa | Required for Parakeet ASR on Apple Silicon |
 | xdotool (Linux) | Text injection |
 
 ---
 
 ## Quick Start
+
+For a complete machine setup checklist, including macOS Input Monitoring,
+Accessibility, Microphone permissions, Python.app selection, and diagnostics,
+see [SETUP.md](SETUP.md).
 
 ### 1. Install Ollama
 
@@ -103,27 +108,40 @@ Edit `~/.voiceflow/config.toml`:
 
 ```toml
 [hotkey]
-key = "ctrl_r"        # Right Ctrl — change to "f9", "alt_r", "ctrl_l", etc.
+key = "ctrl_r"        # Right Ctrl — change to "ctrl", "f9", "alt_r", etc.
 
 [asr]
-model = "large-v3-turbo"   # Whisper model (see below for options)
+engine = "auto"            # auto | parakeet | whisper
+model = ""                 # leave empty for engine default
 language = "en"            # Transcription language code
 compute_type_gpu = "float16"
 compute_type_cpu = "int8"
 
 [llm]
-model = "llama3.2:3b"       # Primary Ollama model
-fallback_model = "phi3:mini"
+docker_llm_url = "http://localhost:12434/engines/llama.cpp/v1"
+docker_llm_model = ""
+ollama_model = "llama3.2:3b"
+ollama_base_url = "http://localhost:11434"
+cleanup_level = "light"    # none | light | medium | high
 temperature = 0.1
 max_tokens = 500
 
 [injection]
-method = "xdotool"          # xdotool | clipboard | pyautogui
+method = "quartz"          # quartz | clipboard | pyautogui | xdotool
 
 [ui]
 show_notification = true
 notification_duration = 3
+dashboard_port = 57327
 ```
+
+### ASR engine options
+
+| Engine | Best for | Notes |
+|--------|----------|-------|
+| `auto` | Recommended | Uses Parakeet on macOS when available, otherwise Whisper |
+| `parakeet` | Apple Silicon speed | Requires `transformers`, `torch`, and `librosa` |
+| `whisper` | Compatibility | Uses `faster-whisper` and supports more languages |
 
 ### Whisper model options (from fastest to most accurate)
 
@@ -166,13 +184,17 @@ CAR-T
 
 ## macOS Notes
 
-- Text injection uses **clipboard paste** (Cmd+V) by default on macOS.
-  Make sure your focused app accepts paste (it always does).
+- Text injection uses **Quartz** by default on macOS.
 - The tray icon appears in the menu bar.
-- You may need to grant **Accessibility permissions** to Terminal / Python:
-  `System Settings → Privacy & Security → Accessibility`
-- If you get a permission error on pynput, also grant **Input Monitoring**:
+- Grant **Input Monitoring** for the hotkey:
   `System Settings → Privacy & Security → Input Monitoring`
+- Grant **Accessibility** for text injection:
+  `System Settings → Privacy & Security → Accessibility`
+- Grant **Microphone** for recording:
+  `System Settings → Privacy & Security → Microphone`
+- If `.venv/bin/python` is greyed out in the macOS picker, run
+  `python check_permission.py` and add the resolved `Python.app` bundle instead.
+- See [SETUP.md](SETUP.md) for the full step-by-step permission flow.
 
 ---
 

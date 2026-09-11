@@ -114,6 +114,18 @@ def _keys_match(key, target) -> bool:
         return False
     if key == target:
         return True
+    if _PYNPUT:
+        try:
+            modifier_groups = (
+                {_kb.Key.ctrl, _kb.Key.ctrl_l, _kb.Key.ctrl_r},
+                {_kb.Key.alt, _kb.Key.alt_l, _kb.Key.alt_r},
+                {_kb.Key.shift, _kb.Key.shift_l, _kb.Key.shift_r},
+                {_kb.Key.cmd, _kb.Key.cmd_l, _kb.Key.cmd_r},
+            )
+            if any(key in group and target in group for group in modifier_groups):
+                return True
+        except Exception:
+            pass
     try:
         if hasattr(key, "char") and isinstance(target, str):
             return key.char == target
