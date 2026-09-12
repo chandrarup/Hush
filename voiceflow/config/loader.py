@@ -1,5 +1,5 @@
 """
-config.py — Loads ~/.voiceflow/config.toml and provides defaults.
+config.py - Loads ~/.voiceflow/config.toml and provides defaults.
 Creates the config file and vocab file if they do not exist.
 """
 

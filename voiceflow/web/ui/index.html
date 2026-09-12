@@ -80,16 +80,18 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .page.active { display: flex; flex-direction: column; }
 
 /* ── Page header ──────────────────────────────────────── */
-.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; gap: 16px; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; margin-bottom: 28px; gap: 16px; }
 .page-title { font-size: 22px; font-weight: 600; }
 .page-sub { font-size: 13px; color: var(--text-3); margin-top: 2px; }
 
 /* ── Stats bar ────────────────────────────────────────── */
 .stats-bar {
-  display: flex; flex-direction: column; gap: 6px;
+  flex: 0 0 100%; display: grid; grid-template-columns: repeat(3, 1fr);
   background: #fafafa; border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 16px 20px; min-width: 140px;
+  border-radius: var(--radius); padding: 0; width: 100%; min-width: 0;
 }
+.stat-item { padding: 14px 20px; }
+.stat-item + .stat-item { border-left: 1px solid var(--border); }
 .stat-val { font-size: 22px; font-weight: 600; color: var(--text-1); line-height: 1; }
 .stat-label { font-size: 12px; color: var(--text-3); margin-top: 2px; }
 
@@ -205,6 +207,18 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
   border-radius: 7px; padding: 5px 12px; font-size: 12px;
 }
 
+/* Snippet controls use the original dashboard form language. */
+.snippet-intro { font-size: 13px; color: var(--text-3); line-height: 1.5; margin: -4px 0 12px; }
+.snippet-form { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.settings-control textarea { border: 1px solid var(--border); border-radius: 7px; padding: 6px 10px; font-size: 13px; font-family: var(--font); background: white; color: var(--text-1); outline: none; min-width: 220px; resize: vertical; }
+.settings-control textarea:focus { border-color: var(--accent); }
+.snippet-list { display: grid; gap: 6px; margin-top: 10px; }
+.snippet-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: #fafafa; font-size: 12px; }
+.snippet-name { min-width: 120px; font-weight: 600; }
+.snippet-shortcut { min-width: 130px; color: var(--accent); font-family: 'SF Mono', monospace; }
+.snippet-text { flex: 1; color: var(--text-2); line-height: 1.4; white-space: pre-wrap; }
+.snippet-path { color: var(--text-3); font-size: 11px; margin-top: 8px; }
+
 /* ── Search bar ───────────────────────────────────────── */
 .search-bar {
   width: 100%; padding: 10px 14px; border: 1px solid var(--border);
@@ -247,8 +261,10 @@ html[data-theme="dark"] .entry-app { background: #2a2a2a; }
 html[data-theme="dark"] .btn,
 html[data-theme="dark"] .settings-control select,
 html[data-theme="dark"] .settings-control input,
+html[data-theme="dark"] .settings-control textarea,
 html[data-theme="dark"] .hotkey-display,
 html[data-theme="dark"] .level-card { background: #1b1b1b; color: var(--text-1); }
+html[data-theme="dark"] .snippet-item { background: #1b1b1b; }
 html[data-theme="dark"] .btn:hover,
 html[data-theme="dark"] .search-bar:focus { background: #242424; }
 html[data-theme="dark"] .search-bar { background: #1b1b1b; color: var(--text-1); }
@@ -256,6 +272,7 @@ html[data-theme="dark"] .level-preview { background: #24203a; }
 html[data-theme="dark"] .level-card.active .level-preview { background: var(--accent-bg); }
 html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
 </style>
+
 </head>
 <body>
 <div class="app">
@@ -306,19 +323,25 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
           <div class="page-sub" id="today-label"></div>
         </div>
         <div class="stats-bar">
-          <div class="stat-val" id="stat-words">–</div>
-          <div class="stat-label">total words</div>
-          <div class="stat-val" id="stat-wpm">–</div>
-          <div class="stat-label">avg wpm</div>
-          <div class="stat-val" id="stat-days">–</div>
-          <div class="stat-label">days active</div>
+          <div class="stat-item">
+            <div class="stat-val" id="stat-words">-</div>
+            <div class="stat-label">total words</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-val" id="stat-wpm">-</div>
+            <div class="stat-label">avg wpm</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-val" id="stat-days">-</div>
+            <div class="stat-label">days active</div>
+          </div>
         </div>
       </div>
 
       <div class="banner">
         <div class="banner-text">
           <h2>Make VoiceFlow sound like <em>you</em></h2>
-          <p>Hold your hotkey, speak naturally — text appears instantly.</p>
+          <p>Hold your hotkey, speak naturally - text appears instantly.</p>
         </div>
         <div class="hotkey-badge" id="hotkey-badge">⌘ cmd_r</div>
       </div>
@@ -372,7 +395,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
         <div class="level-card" data-level="high">
           <h3>High</h3>
           <div class="level-desc">Rewrites for brevity and polish while keeping your meaning.</div>
-          <div class="level-preview">Let's meet at 3pm — thoughts?</div>
+          <div class="level-preview">Let's meet at 3pm - thoughts?</div>
         </div>
       </div>
     </div>
@@ -433,6 +456,25 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
       </div>
 
       <div class="settings-section">
+        <h3>Snippets</h3>
+        <p class="snippet-intro">Save text you type often. Say the shortcut exactly, and VoiceFlow expands it before typing. Snippets work in any focused text field.</p>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">New spoken shortcut</div>
+            <div class="settings-row-sub">Example: “work intro” becomes your full introduction.</div>
+          </div>
+          <div class="settings-control snippet-form">
+            <input id="snippet-name" type="text" placeholder="Name">
+            <input id="snippet-shortcut" type="text" placeholder="Spoken shortcut">
+            <textarea id="snippet-text" rows="2" placeholder="Text to expand"></textarea>
+            <button class="btn primary" id="btn-add-snippet" type="button">Save snippet</button>
+          </div>
+        </div>
+        <div class="snippet-list" id="snippet-list"></div>
+        <div class="snippet-path" id="snippet-path"></div>
+      </div>
+
+      <div class="settings-section">
         <h3>Dashboard</h3>
         <div class="settings-row">
           <div>
@@ -481,6 +523,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     document.getElementById('page-' + el.dataset.page).classList.add('active');
     if (el.dataset.page === 'home') loadHome();
     if (el.dataset.page === 'history') loadHistory();
+    if (el.dataset.page === 'settings') loadSnippets();
   });
 });
 
@@ -574,7 +617,7 @@ async function loadHome() {
     ]);
     document.getElementById('stat-words').textContent = stats.total_words >= 1000
       ? (stats.total_words/1000).toFixed(1)+'K' : stats.total_words;
-    document.getElementById('stat-wpm').textContent = stats.avg_wpm || '–';
+    document.getElementById('stat-wpm').textContent = stats.avg_wpm || '-';
     document.getElementById('stat-days').textContent = stats.active_days;
     document.getElementById('hotkey-badge').textContent = '⌘ ' + (status.hotkey || 'cmd_r');
     document.getElementById('hotkey-display').textContent = status.hotkey || 'cmd_r';
@@ -631,6 +674,62 @@ function copyText(text) {
     ta.value = text; document.body.appendChild(ta);
     ta.select(); document.execCommand('copy'); ta.remove();
   });
+}
+
+function renderSnippets(data) {
+  const list = document.getElementById('snippet-list');
+  const snippets = data.snippets || [];
+  document.getElementById('snippet-path').textContent = data.path ? 'Stored locally at ' + data.path : '';
+  if (!snippets.length) {
+    list.innerHTML = '<div class="feed-empty">No snippets saved yet.</div>';
+    return;
+  }
+  list.innerHTML = snippets.map(snippet => `
+    <div class="snippet-item">
+      <div class="snippet-name">${escHtml(snippet.name)}</div>
+      <div class="snippet-shortcut">“${escHtml(snippet.shortcut)}”</div>
+      <div class="snippet-text">${escHtml(snippet.text)}</div>
+      <button class="btn danger" type="button" onclick="removeSnippet(${snippet.index})">Remove</button>
+    </div>`).join('');
+}
+
+async function loadSnippets() {
+  try {
+    const response = await fetch(API + '/snippets');
+    if (!response.ok) throw new Error('Could not load snippets');
+    renderSnippets(await response.json());
+  } catch (error) {
+    document.getElementById('snippet-list').innerHTML = '<div class="feed-empty">Start VoiceFlow, then open http://localhost:57327/ to manage snippets.</div>';
+    document.getElementById('snippet-path').textContent = '';
+  }
+}
+
+document.getElementById('btn-add-snippet').addEventListener('click', async () => {
+  const name = document.getElementById('snippet-name').value.trim();
+  const shortcut = document.getElementById('snippet-shortcut').value.trim();
+  const text = document.getElementById('snippet-text').value.trim();
+  if (!name || !shortcut || !text) {
+    alert('Enter a name, spoken shortcut, and expanded text.');
+    return;
+  }
+  const response = await fetch(API + '/snippets', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, shortcut, text}),
+  });
+  if (!response.ok) {
+    alert((await response.json()).error || 'Could not save snippet.');
+    return;
+  }
+  document.getElementById('snippet-name').value = '';
+  document.getElementById('snippet-shortcut').value = '';
+  document.getElementById('snippet-text').value = '';
+  loadSnippets();
+});
+
+async function removeSnippet(index) {
+  await fetch(API + '/snippets/' + index, {method: 'DELETE'});
+  loadSnippets();
 }
 
 // ── Style / Level ────────────────────────────────────────────────── //

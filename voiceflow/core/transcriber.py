@@ -1,5 +1,5 @@
 """
-transcriber.py — ASR with dual-engine support.
+transcriber.py - ASR with dual-engine support.
 
 Engine A: NVIDIA Parakeet TDT 0.6B v3  (BEST for English on Apple Silicon)
   - 10× faster than Whisper large-v3-turbo
@@ -62,7 +62,7 @@ def _best_ctranslate_device() -> tuple[str, str]:
 
 
 # ──────────────────────────────────────────────────────────────────── #
-#  Engine A — Parakeet                                                  #
+#  Engine A - Parakeet                                                  #
 # ──────────────────────────────────────────────────────────────────── #
 
 class ParakeetTranscriber:
@@ -115,7 +115,7 @@ class ParakeetTranscriber:
 
 
 # ──────────────────────────────────────────────────────────────────── #
-#  Engine B — Whisper (faster-whisper)                                  #
+#  Engine B - Whisper (faster-whisper)                                  #
 # ──────────────────────────────────────────────────────────────────── #
 
 class WhisperTranscriber:

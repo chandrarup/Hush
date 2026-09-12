@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — One-command VoiceFlow installer
+# install.sh - One-command VoiceFlow installer
 # Usage: bash install.sh
 # Requires: macOS 12+, internet connection (first run)
 set -euo pipefail
@@ -72,7 +72,7 @@ fi
 if command -v ollama &>/dev/null; then
   ok "Ollama found"
   info "Pulling llama3.2:3b model (first pull only, ~2 GB)..."
-  ollama pull llama3.2:3b || warn "Could not pull model — run 'ollama pull llama3.2:3b' manually"
+  ollama pull llama3.2:3b || warn "Could not pull model - run 'ollama pull llama3.2:3b' manually"
 fi
 
 # ── 5. Create config ──────────────────────────────────────────────── #
@@ -104,14 +104,14 @@ dashboard_port        = 57327
 EOF
   ok "Config written to $CONFIG_DIR/config.toml"
 else
-  ok "Config already exists — skipping"
+  ok "Config already exists - skipping"
 fi
 
 # ── 6. Create launcher ────────────────────────────────────────────── #
 info "Creating launcher script..."
 cat > "$LAUNCH_SCRIPT" << EOF
 #!/usr/bin/env bash
-# VoiceFlow launcher — double-click or run from terminal
+# VoiceFlow launcher - double-click or run from terminal
 cd "$REPO_DIR"
 # Start Ollama in background if not running
 if command -v ollama &>/dev/null && ! pgrep -x ollama &>/dev/null; then

@@ -141,6 +141,23 @@ The SQLite transcription history is stored at `data/history.db` inside the
 repository. The `data/` directory is created automatically and the database is
 ignored by Git because it contains runtime user data.
 
+### Spoken snippets
+
+Open the dashboard at `http://localhost:57327/`, then go to Settings and find
+Snippets. Give the entry a name, enter the phrase you will say, and enter the
+text VoiceFlow should type. For example:
+
+```text
+Name: Work introduction
+Spoken shortcut: work intro
+Text to expand: Hi, I am Vishnu. I work on data and cloud applications.
+```
+
+Save the snippet, focus any text field, hold the VoiceFlow hotkey, and say
+`work intro`. VoiceFlow expands the phrase before it injects the text. Snippets
+are stored locally in `~/.voiceflow/snippets.toml` and are reloaded for each
+recording.
+
 ## 6. macOS Privacy Permissions
 
 Open:

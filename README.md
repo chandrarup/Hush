@@ -1,22 +1,45 @@
 # VoiceFlow
 
-**Local push-to-talk speech-to-text dictation — a Wispr Flow replica using 100% open-source tools.**
+**Local push-to-talk writing assistant built with open-source tools.**
 
 Hold a hotkey → speak → release → polished text appears wherever your cursor is.
 No cloud APIs. No subscriptions. No data leaves your machine.
 
 ---
 
-## What it does
+## Core experience
 
-1. **Hold** Right Ctrl (configurable) — microphone starts recording
-2. **Speak** anything naturally (filler words, false starts, all fine)
-3. **Release** the hotkey — pipeline runs automatically:
-   - Voice Activity Detection trims silence
-   - Whisper (`large-v3-turbo`) transcribes your speech
-   - Llama 3.2 (via Ollama) removes filler words, fixes grammar, resolves self-corrections
-   - Clean text is injected directly into whatever text field is focused
-4. A floating notification shows raw vs. cleaned text for 3 seconds
+### Speak naturally
+
+Ramble, pause, restart, or change your mind. VoiceFlow captures the full thought,
+then keeps the meaning while removing filler and false starts.
+
+### Edit as you speak
+
+After you release the hotkey, the cleanup pipeline removes filler words, fixes
+punctuation, and formats the result without changing your voice. The raw and
+cleaned versions remain visible in local history.
+
+### Use it anywhere
+
+VoiceFlow injects the finished text into the focused field through the active
+platform adapter. It works in editors, browsers, terminals, chat apps, and
+other places where you can type. No plugin is required.
+
+### Save your most used text
+
+Create a snippet with a spoken shortcut such as `work intro`, then store the
+full text it should expand to. Say the shortcut by itself and VoiceFlow expands
+it before injection. Snippets are managed in the dashboard under Settings and
+stored locally in `~/.voiceflow/snippets.toml`.
+
+The pipeline is:
+
+1. Hold Right Ctrl, or your configured hotkey, to start recording.
+2. Speak naturally. Voice Activity Detection trims silence.
+3. Release the hotkey. Parakeet or Whisper transcribes the audio.
+4. The local cleanup model edits the transcript according to the selected style.
+5. A matching spoken snippet expands before the final text is injected.
 
 **Example:**
 > You say: *"um so I was thinking like maybe we should uh meet at 4pm actually no 3pm works better"*
@@ -137,7 +160,7 @@ Edit `~/.voiceflow/config.toml`:
 
 ```toml
 [hotkey]
-key = "ctrl_r"        # Right Ctrl — change to "ctrl", "f9", "alt_r", etc.
+key = "ctrl_r"        # Right Ctrl - change to "ctrl", "f9", "alt_r", etc.
 
 [asr]
 engine = "auto"            # auto | parakeet | whisper
@@ -194,7 +217,7 @@ automatically when VoiceFlow starts.
 | `ctrl_l` | Left Control |
 | `alt_r` | Right Alt |
 | `alt_l` | Left Alt |
-| `f9` – `f12` | Function keys |
+| `f9` - `f12` | Function keys |
 | `cmd` | Command (macOS) |
 
 ---
@@ -205,7 +228,7 @@ Add custom words, names, or technical terms to `~/.voiceflow/vocab.txt` (one per
 These are passed to Whisper as hints to improve recognition accuracy.
 
 ```
-# ~/.voiceflow/vocab.txt — example
+# ~/.voiceflow/vocab.txt - example
 LangChain
 PyTorch
 Professor Roysam
@@ -240,7 +263,8 @@ voiceflow/
 ├── config/
 │   ├── defaults.py           # Default configuration values
 │   ├── loader.py             # User config and vocabulary loading
-│   └── paths.py              # Repository-local application data paths
+│   ├── paths.py              # Repository-local application data paths
+│   └── snippets.py           # Persistent spoken shortcut storage and expansion
 ├── prompts/
 │   └── cleanup.py            # Versioned LLM prompt catalog
 ├── core/
@@ -310,7 +334,7 @@ sudo apt-get install xdotool
 # In a separate terminal:
 ollama serve
 ```
-VoiceFlow degrades gracefully — if Ollama is unavailable, it injects the raw Whisper transcript.
+VoiceFlow degrades gracefully - if Ollama is unavailable, it injects the raw Whisper transcript.
 
 **pynput permission error on macOS**
 ```
@@ -327,4 +351,4 @@ pystray requires a system tray. On pure Wayland, install `gnome-shell-extension-
 
 ## License
 
-MIT — free to use, modify, and distribute.
+MIT - free to use, modify, and distribute.

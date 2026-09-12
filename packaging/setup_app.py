@@ -1,5 +1,5 @@
 """
-setup_app.py — py2app configuration for VoiceFlow.
+setup_app.py - py2app configuration for VoiceFlow.
 Usage: uv run --group build --extra parakeet python packaging/setup_app.py py2app
 
 Build dependencies are managed by uv. Run the command above from the repository

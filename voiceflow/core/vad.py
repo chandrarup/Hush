@@ -1,5 +1,5 @@
 """
-vad.py — Voice Activity Detection using webrtcvad.
+vad.py - Voice Activity Detection using webrtcvad.
 
 Trims leading and trailing silence from a float32 audio buffer.
 webrtcvad requires:
@@ -20,9 +20,9 @@ except ImportError:
     print("[vad] WARNING: webrtcvad not installed. VAD trimming disabled.")
 
 SAMPLE_RATE = 16000
-FRAME_DURATION_MS = 30          # 30 ms frames — best supported by webrtcvad
+FRAME_DURATION_MS = 30          # 30 ms frames - best supported by webrtcvad
 FRAME_SIZE = int(SAMPLE_RATE * FRAME_DURATION_MS / 1000)  # 480 samples
-VAD_MODE = 2                    # aggressiveness: 0 (least) – 3 (most)
+VAD_MODE = 2                    # aggressiveness: 0 (least) - 3 (most)
 
 # How many consecutive voiced/silent frames needed to flip state
 VOICED_TRIGGER = 2
@@ -48,7 +48,7 @@ def trim_silence(
     Args:
         audio:       1-D float32 numpy array at `sample_rate` Hz.
         sample_rate: Must be 8000, 16000, or 32000.
-        mode:        VAD aggressiveness 0–3.
+        mode:        VAD aggressiveness 0-3.
         padding_ms:  Milliseconds of padding to keep around voiced regions.
 
     Returns:
@@ -85,7 +85,7 @@ def trim_silence(
     # Find first and last voiced frame indices
     voiced_indices = [i for i, v in enumerate(voiced_flags) if v]
     if not voiced_indices:
-        # No voiced speech detected — return original (let transcriber handle it)
+        # No voiced speech detected - return original (let transcriber handle it)
         print("[vad] No voiced frames detected; returning original audio.")
         return audio
 
@@ -98,7 +98,7 @@ def trim_silence(
     trimmed_dur = len(trimmed) / sample_rate
     print(
         f"[vad] Trimmed {original_dur:.2f}s → {trimmed_dur:.2f}s "
-        f"({voiced_indices[0]}–{voiced_indices[-1]+1} of {len(frames)} frames voiced)"
+        f"({voiced_indices[0]}-{voiced_indices[-1]+1} of {len(frames)} frames voiced)"
     )
     return trimmed.astype(np.float32)
 

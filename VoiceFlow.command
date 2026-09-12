@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# VoiceFlow.command — Double-clickable launcher for VoiceFlow
+# VoiceFlow.command - Double-clickable launcher for VoiceFlow
 # macOS recognises .command files and can run them from Finder / DMG
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$SCRIPT_DIR/.venv"

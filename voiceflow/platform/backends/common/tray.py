@@ -61,7 +61,7 @@ class TrayIcon:
 
     def run_blocking(self):
         if not self._enabled:
-            print("[tray] Tray disabled — running headlessly.")
+            print("[tray] Tray disabled - running headlessly.")
             try:
                 while True:
                     time.sleep(1)
@@ -78,7 +78,7 @@ class TrayIcon:
         self._icon = pystray.Icon(
             name="VoiceFlow",
             icon=_make_image(STATE_COLORS["idle"]),
-            title="VoiceFlow — Idle",
+            title="VoiceFlow - Idle",
             menu=menu,
         )
         print("[tray] Starting tray icon on main thread.")
@@ -109,9 +109,9 @@ class TrayIcon:
         if self._icon is None:
             return
         titles = {
-            "idle": "VoiceFlow — Idle",
-            "recording": "VoiceFlow — Recording…",
-            "processing": "VoiceFlow — Processing…",
+            "idle": "VoiceFlow - Idle",
+            "recording": "VoiceFlow - Recording…",
+            "processing": "VoiceFlow - Processing…",
         }
         try:
             self._icon.icon = image

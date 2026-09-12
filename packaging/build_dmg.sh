@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build_dmg.sh — Create distributable VoiceFlow DMG
+# build_dmg.sh - Create distributable VoiceFlow DMG
 # Usage: bash packaging/build_dmg.sh
 # Requires: create-dmg  (brew install create-dmg)
 set -euo pipefail

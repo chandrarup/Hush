@@ -1,10 +1,10 @@
 """
-cleaner.py — LLM post-processing with a 3-tier fallback chain.
+cleaner.py - LLM post-processing with a 3-tier fallback chain.
 
 Priority order (exactly like AlphaScanner):
-  1. Docker LLM  — http://localhost:12434/engines/llama.cpp/v1  (your existing setup)
-  2. Ollama      — http://localhost:11434  (if installed)
-  3. Raw         — return transcript unchanged (graceful degradation)
+  1. Docker LLM  - http://localhost:12434/engines/llama.cpp/v1  (your existing setup)
+  2. Ollama      - http://localhost:11434  (if installed)
+  3. Raw         - return transcript unchanged (graceful degradation)
 
 The Docker LLM uses the same OpenAI-compatible API you used in AlphaScanner:
   POST /engines/llama.cpp/v1/chat/completions
@@ -35,7 +35,7 @@ except ImportError:
 
 LLM_TIMEOUT = 6   # seconds before we give up and return raw (was 10)
 
-# One-time availability cache — set by main.py after the startup probe.
+# One-time availability cache - set by main.py after the startup probe.
 # None = unknown (will probe once), True = available, False = skip entirely.
 _docker_llm_available: bool | None = None
 
@@ -44,7 +44,7 @@ def set_docker_llm_available(available: bool) -> None:
     """Called by main.py after the startup Docker LLM check."""
     global _docker_llm_available
     _docker_llm_available = available
-    state = "✓ available" if available else "✗ unavailable — will use Ollama"
+    state = "✓ available" if available else "✗ unavailable - will use Ollama"
     print(f"[cleaner] Docker LLM cached as: {state}")
 
 # ──────────────────────────────────────────────────────────────────── #
@@ -136,7 +136,7 @@ def _call_ollama_http(
     temperature: float,
     max_tokens: int,
 ) -> str:
-    """Call Ollama via HTTP (OpenAI-compatible endpoint) — no SDK needed."""
+    """Call Ollama via HTTP (OpenAI-compatible endpoint) - no SDK needed."""
     url = base_url.rstrip("/") + "/v1/chat/completions"
     payload = {
         "model": model,
@@ -160,7 +160,7 @@ def clean_transcript(
     raw_transcript: str,
     # Cleanup level
     level: str            = "light",   # none | light | medium | high
-    # Docker LLM (primary — your existing setup)
+    # Docker LLM (primary - your existing setup)
     docker_llm_url: str  = "http://localhost:12434/engines/llama.cpp/v1",
     docker_llm_model: str = "",
     # Ollama (secondary fallback)
@@ -184,13 +184,13 @@ def clean_transcript(
 
     # None: skip LLM entirely
     if level == "none":
-        print("[cleaner] Level=none — returning raw transcript.")
+        print("[cleaner] Level=none - returning raw transcript.")
         return raw_transcript.strip()
 
     # Short utterance bypass
     word_count = len(raw_transcript.split())
     if word_count <= SHORT_UTTERANCE_WORDS:
-        print(f"[cleaner] Short utterance ({word_count} words) — skipping LLM.")
+        print(f"[cleaner] Short utterance ({word_count} words) - skipping LLM.")
         return raw_transcript.strip()
 
     system_prompt = _build_system_prompt(app_context, level)
@@ -202,7 +202,7 @@ def clean_transcript(
     def _worker():
         global _docker_llm_available
 
-        # ── Tier 1: Docker LLM — skip if known unavailable ─────────── #
+        # ── Tier 1: Docker LLM - skip if known unavailable ─────────── #
         if _docker_llm_available is not False:
             effective_model = docker_llm_model
             if not effective_model:
@@ -225,7 +225,7 @@ def clean_transcript(
                     print(f"[cleaner] ✗ Docker LLM failed: {e}")
                     _docker_llm_available = False  # don't retry next time
             else:
-                # No model detected — mark as unavailable
+                # No model detected - mark as unavailable
                 _docker_llm_available = False
         else:
             print("[cleaner] Skipping Docker LLM (known unavailable).")
@@ -253,7 +253,7 @@ def clean_transcript(
             print(f"[cleaner] ✗ Ollama failed: {e}")
 
         # ── Tier 3: Raw passthrough ────────────────────────────────── #
-        print("[cleaner] All LLMs unavailable — using raw transcript.")
+        print("[cleaner] All LLMs unavailable - using raw transcript.")
         result["error"] = "all_failed"
 
     t = threading.Thread(target=_worker, daemon=True)
@@ -261,7 +261,7 @@ def clean_transcript(
     t.join(timeout=LLM_TIMEOUT + 1)
 
     if t.is_alive():
-        print("[cleaner] Timeout — returning raw transcript.")
+        print("[cleaner] Timeout - returning raw transcript.")
         return raw_transcript
 
     return result["text"] if result["text"] is not None else raw_transcript

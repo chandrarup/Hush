@@ -1,5 +1,5 @@
 """
-api_server.py — Local FastAPI server for the VoiceFlow dashboard.
+api_server.py - Local FastAPI server for the VoiceFlow dashboard.
 
 Runs on http://localhost:57327 (loopback only).
 Serves:
@@ -8,6 +8,9 @@ Serves:
   GET  /stats         → word count, wpm, days
   GET  /status        → app state (recording/idle, cleanup level, etc.)
   POST /settings      → update cleanup level, hotkey display name
+  GET  /snippets      → saved spoken shortcuts
+  POST /snippets      → create or update a spoken shortcut
+  DELETE /snippets/{id} → remove a spoken shortcut
   DELETE /history     → clear all history
   DELETE /history/{id}→ delete one entry
   GET  /events        → Server-Sent Events stream for live updates
@@ -30,6 +33,12 @@ except ImportError:
     _FASTAPI_OK = False
 
 from ..core import history as _history
+from ..config.snippets import (
+    SNIPPETS_PATH,
+    add_snippet,
+    load_snippets,
+    remove_snippet,
+)
 from ..platform.factory import get_platform_services
 
 # ── Shared state (updated by main.py) ─────────────────────────────── #
@@ -55,7 +64,7 @@ _event_loop: asyncio.AbstractEventLoop | None = None
 def push_event(event: dict):
     """
     Push a live event to all connected dashboard clients.
-    Thread-safe — called from the pipeline thread.
+    Thread-safe - called from the pipeline thread.
     """
     global _event_loop
     if _event_loop is None:
@@ -136,6 +145,38 @@ if _FASTAPI_OK:
             _persist_cleanup_level(data["cleanup_level"])
         return {"ok": True, "state": dict(_state)}
 
+    @app.get("/snippets")
+    async def get_snippets():
+        return {
+            "path": str(SNIPPETS_PATH),
+            "snippets": [
+                {**snippet, "index": index}
+                for index, snippet in enumerate(load_snippets())
+            ],
+        }
+
+    @app.post("/snippets")
+    async def post_snippet(request: Request):
+        data = await request.json()
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A snippet object is required."}, status_code=400)
+        try:
+            snippets = add_snippet(
+                data.get("name", ""),
+                data.get("shortcut", ""),
+                data.get("text", ""),
+            )
+            return {"ok": True, "snippets": snippets}
+        except (AttributeError, TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    @app.delete("/snippets/{snippet_index}")
+    async def delete_snippet(snippet_index: int):
+        try:
+            return {"ok": True, "snippets": remove_snippet(snippet_index)}
+        except IndexError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+
     @app.delete("/history")
     async def clear_history():
         _history.clear_all()
@@ -213,7 +254,7 @@ def _persist_cleanup_level(level: str):
 def start_server(host: str = "127.0.0.1", port: int = 57327):
     """Start uvicorn in a background daemon thread. Non-blocking."""
     if not _FASTAPI_OK:
-        print("[api] FastAPI/uvicorn not installed — dashboard unavailable.")
+        print("[api] FastAPI/uvicorn not installed - dashboard unavailable.")
         return
 
     def _run():

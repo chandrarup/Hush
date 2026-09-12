@@ -1,5 +1,5 @@
 """
-audio.py — Push-to-talk audio capture using sounddevice.
+audio.py - Push-to-talk audio capture using sounddevice.
 
 Usage:
     recorder = AudioRecorder(sample_rate=16000, channels=1)
@@ -46,7 +46,7 @@ class AudioRecorder:
         if status:
             print(f"[audio] sounddevice status: {status}")
         if self._recording:
-            # indata shape: (frames, channels) — copy to avoid reuse issues
+            # indata shape: (frames, channels) - copy to avoid reuse issues
             with self._lock:
                 self._chunks.append(indata.copy())
 

@@ -1,5 +1,5 @@
 """
-history.py — SQLite transcription history store.
+history.py - SQLite transcription history store.
 
 Saves every transcription entry with timestamp, raw ASR output,
 LLM-cleaned output, cleanup level, and active app name to ``data/history.db``.

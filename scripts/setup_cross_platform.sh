@@ -114,13 +114,13 @@ notification_duration = 3
 TOML
     echo "  Created ~/.voiceflow/config.toml"
 else
-    echo "  Config already exists — skipping."
+    echo "  Config already exists - skipping."
 fi
 
 # Create empty vocab file
 if [ ! -f ~/.voiceflow/vocab.txt ]; then
     touch ~/.voiceflow/vocab.txt
-    echo "  Created ~/.voiceflow/vocab.txt (empty — add custom words one per line)"
+    echo "  Created ~/.voiceflow/vocab.txt (empty - add custom words one per line)"
 fi
 
 # ── Ollama setup ──────────────────────────────────────────────────────────── #
@@ -143,7 +143,7 @@ else
     echo "    ollama serve          # (in a separate terminal or as a service)"
     echo "    ollama pull llama3.2:3b"
     echo ""
-    echo "  VoiceFlow works without Ollama — it will use raw Whisper output instead."
+    echo "  VoiceFlow works without Ollama - it will use raw Whisper output instead."
 fi
 
 # ── Done ─────────────────────────────────────────────────────────────────── #
@@ -161,6 +161,6 @@ echo "    • Release to transcribe and inject text"
 echo "    • Right-click the tray icon to Quit"
 echo ""
 echo "  Customize:"
-echo "    • ~/.voiceflow/config.toml  — hotkey, models, language"
-echo "    • ~/.voiceflow/vocab.txt    — personal vocabulary (one word/phrase per line)"
+echo "    • ~/.voiceflow/config.toml  - hotkey, models, language"
+echo "    • ~/.voiceflow/vocab.txt    - personal vocabulary (one word/phrase per line)"
 echo ""

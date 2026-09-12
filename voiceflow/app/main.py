@@ -8,7 +8,7 @@ Threading architecture:
   Main thread  → pystray tray icon (AppKit REQUIRES this)
   Thread B     → pynput keyboard listener
   Thread C     → audio capture (sounddevice callback)
-  Thread D     → pipeline (VAD + ASR + LLM + inject) — one at a time
+  Thread D     → pipeline (VAD + ASR + LLM + inject) - one at a time
 
 """
 
@@ -18,7 +18,8 @@ import time
 import threading
 import numpy as np
 
-from ..config import load_config, load_vocab
+from ..config import load_config, load_snippets, load_vocab
+from ..config.snippets import expand_snippets, is_exact_shortcut
 from ..core.audio import AudioRecorder
 from ..core.vad import trim_silence, audio_duration
 from ..core.transcriber import create_transcriber
@@ -46,7 +47,7 @@ _hotkey_target          = None
 _hotkey_pressed         = False
 _captured_context: dict = {}
 _pipeline_lock          = threading.Lock()
-_listener               = None   # pynput Listener — kept alive in thread
+_listener               = None   # pynput Listener - kept alive in thread
 
 
 # ──────────────────────────────────────────────────────────────────── #
@@ -81,7 +82,7 @@ def _resolve_hotkey(key_name: str):
         return special[k]
     if len(k) == 1:
         return k
-    print(f"[main] Unknown hotkey '{key_name}' — defaulting to Right Ctrl.")
+    print(f"[main] Unknown hotkey '{key_name}' - defaulting to Right Ctrl.")
     return _kb.Key.ctrl_r
 
 
@@ -116,7 +117,7 @@ def _keys_match(key, target) -> bool:
 
 def _run_pipeline(audio: np.ndarray, app_context: dict):
     if not _pipeline_lock.acquire(blocking=False):
-        print("[main] Pipeline busy — skipping this recording.")
+        print("[main] Pipeline busy - skipping this recording.")
         return
 
     tray = _platform.tray.get_tray()
@@ -126,7 +127,7 @@ def _run_pipeline(audio: np.ndarray, app_context: dict):
         # 1. VAD trim
         audio = trim_silence(audio)
         if audio_duration(audio) < MIN_AUDIO_SECONDS:
-            print("[main] Audio too short — discarding.")
+            print("[main] Audio too short - discarding.")
             return
 
         # 2. Transcribe
@@ -135,7 +136,7 @@ def _run_pipeline(audio: np.ndarray, app_context: dict):
             return
         raw_text = _transcriber.transcribe(audio, vocab=_vocab)
         if not raw_text or not raw_text.strip():
-            print("[main] Empty transcript — discarding.")
+            print("[main] Empty transcript - discarding.")
             return
 
         print(f"\n{'─'*55}")
@@ -147,17 +148,23 @@ def _run_pipeline(audio: np.ndarray, app_context: dict):
         active_app = app_context.get("app")
         level      = llm_cfg.get("cleanup_level", "light")
 
-        clean_text = clean_transcript(
-            raw_text,
-            level            = level,
-            docker_llm_url   = llm_cfg.get("docker_llm_url",   "http://localhost:12434/engines/llama.cpp/v1"),
-            docker_llm_model = llm_cfg.get("docker_llm_model", ""),
-            ollama_model     = llm_cfg.get("ollama_model",     "llama3.2:3b"),
-            ollama_base_url  = llm_cfg.get("ollama_base_url",  "http://localhost:11434"),
-            temperature      = llm_cfg.get("temperature", 0.1),
-            max_tokens       = llm_cfg.get("max_tokens", 500),
-            app_context      = active_app,
-        )
+        snippets = load_snippets()
+        snippet_text = expand_snippets(raw_text, snippets)
+        if snippet_text != raw_text and is_exact_shortcut(raw_text, snippets):
+            clean_text = snippet_text
+            print("  SNIPPET: expanded spoken shortcut")
+        else:
+            clean_text = clean_transcript(
+                snippet_text,
+                level            = level,
+                docker_llm_url   = llm_cfg.get("docker_llm_url",   "http://localhost:12434/engines/llama.cpp/v1"),
+                docker_llm_model = llm_cfg.get("docker_llm_model", ""),
+                ollama_model     = llm_cfg.get("ollama_model",     "llama3.2:3b"),
+                ollama_base_url  = llm_cfg.get("ollama_base_url",  "http://localhost:11434"),
+                temperature      = llm_cfg.get("temperature", 0.1),
+                max_tokens       = llm_cfg.get("max_tokens", 500),
+                app_context      = active_app,
+            )
 
         print(f"  CLEAN: {clean_text}")
         print(f"{'─'*55}\n")
@@ -225,7 +232,7 @@ def _on_press(key):
             _recorder.start()
         except RuntimeError as e:
             # No audio device available (e.g. headphones disconnected mid-session)
-            print(f"[main] ⚠ Audio device error: {e} — try plugging in a mic and pressing again.")
+            print(f"[main] ⚠ Audio device error: {e} - try plugging in a mic and pressing again.")
             _api.push_event({"type": "status", "value": "idle"})
             _platform.tray.get_tray().set_state("idle")
             _hotkey_pressed = False  # let next press retry
@@ -237,7 +244,7 @@ def _on_release(key):
         return
 
     _hotkey_pressed = False
-    print("[main] ■ STOPPED — running pipeline…")
+    print("[main] ■ STOPPED - running pipeline…")
     _api.push_event({"type": "status", "value": "processing"})
 
     if not _recorder:
@@ -253,7 +260,7 @@ def _on_release(key):
 
 
 # ──────────────────────────────────────────────────────────────────── #
-#  Keyboard listener — runs in its own thread                           #
+#  Keyboard listener - runs in its own thread                           #
 # ──────────────────────────────────────────────────────────────────── #
 
 def _start_listener():
@@ -279,12 +286,12 @@ def _start_listener():
             on_release=_on_release,
             suppress=False,
         )
-        lst.start()   # called from main thread — CFRunLoop exists here
+        lst.start()   # called from main thread - CFRunLoop exists here
         _listener = lst
         trusted = getattr(lst, 'IS_TRUSTED', None)
         if trusted is False:
             print("\n" + "!" * 66)
-            print("[main] ⚠  IS_TRUSTED = False — INPUT MONITORING NOT GRANTED")
+            print("[main] ⚠  IS_TRUSTED = False - INPUT MONITORING NOT GRANTED")
             print("[main]    The operating system is blocking global key events.")
             print("[main]    Check the keyboard/input permission for the launcher, then RESTART.")
             print("!" * 66 + "\n")
@@ -295,7 +302,7 @@ def _start_listener():
         _print_permission_guide()
         return None
 
-    # Keepalive thread — just prevents the listener from being GC'd
+    # Keepalive thread - just prevents the listener from being GC'd
     def _keepalive():
         while _listener and _listener.running:
             time.sleep(0.5)
@@ -319,10 +326,10 @@ def _check_docker_llm(url: str):
             print(f"[main] ✓ Docker LLM at {url}  models={names}")
             set_docker_llm_available(True)
         else:
-            print(f"[main] ✗ Docker LLM status {r.status_code} — will use Ollama.")
+            print(f"[main] ✗ Docker LLM status {r.status_code} - will use Ollama.")
             set_docker_llm_available(False)
     except Exception as e:
-        print(f"[main] ✗ Docker LLM unreachable ({e}) — will use Ollama.")
+        print(f"[main] ✗ Docker LLM unreachable ({e}) - will use Ollama.")
         set_docker_llm_available(False)
 
 
@@ -334,7 +341,7 @@ def main():
     global _config, _vocab, _transcriber, _recorder, _hotkey_target
 
     print("=" * 60)
-    print("  VoiceFlow — Local Push-to-Talk Dictation")
+    print("  VoiceFlow - Local Push-to-Talk Dictation")
     print("=" * 60)
 
     # ── Config ───────────────────────────────────────────────────────
@@ -387,7 +394,7 @@ def main():
     print(f"\n[main] Hotkey : {key_name}")
     print(f"[main] Engine : {type(_transcriber).__name__}")
     print(f"[main] LLM    : {docker_url}")
-    print("\n[main] ✓ Ready — hold hotkey to record, release to transcribe.")
+    print("\n[main] ✓ Ready - hold hotkey to record, release to transcribe.")
     print("[main] Right-click the menu bar icon to Quit.")
     print("[main] (If hotkey does nothing, check keyboard/input permission for the launcher)\n")
 
@@ -407,7 +414,7 @@ def main():
     tray.setup(on_quit=lambda: os._exit(0), dashboard_port=dashboard_port)
 
     print(f"\n[main] Dashboard : http://localhost:{dashboard_port}")
-    print("[main] ✓ Ready — hold hotkey to record, release to transcribe.")
+    print("[main] ✓ Ready - hold hotkey to record, release to transcribe.")
     print("[main] Right-click the menu bar icon to open Dashboard or Quit.\n")
 
     # ── First-launch onboarding ────────────────────────────────────────
@@ -417,7 +424,7 @@ def main():
             time.sleep(1.5)   # let uvicorn start
             webbrowser.open(f"http://localhost:{dashboard_port}/onboarding")
         threading.Thread(target=_open_onboarding, daemon=True).start()
-        print("[main] First launch — opening onboarding wizard in browser.")
+        print("[main] First launch - opening onboarding wizard in browser.")
 
     # This BLOCKS until the user clicks Quit in the tray menu
     tray.run_blocking()
