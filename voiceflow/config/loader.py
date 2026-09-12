@@ -77,3 +77,12 @@ def load_vocab() -> list[str]:
     except Exception as e:
         print(f"[config] WARNING: Could not read vocab file ({e}).")
         return []
+
+
+def update_config_value(section: str, key: str, value) -> None:
+    """Persist one user setting without making callers manage TOML files."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    config = toml.load(str(CONFIG_PATH)) if CONFIG_PATH.exists() else {}
+    config.setdefault(section, {})[key] = value
+    with CONFIG_PATH.open("w", encoding="utf-8") as handle:
+        toml.dump(config, handle)

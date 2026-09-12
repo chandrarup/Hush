@@ -33,6 +33,10 @@ PlatformServices  <-- stable capability contracts
   by capability: text injection, notifications, context, and permissions.
 - `voiceflow/platform/backends/common/` contains implementations reusable by
   more than one platform, such as the tray and clipboard helpers.
+- `voiceflow/application/` owns the platform-neutral dictation workflow,
+  durable job model, and ports that local and hosted adapters must satisfy.
+- `voiceflow/core/jobs.py` is the local SQLite job adapter. A hosted
+  PostgreSQL or cloud-job adapter can replace it without changing the workflow.
 
 ## Application dependency management
 
@@ -78,6 +82,30 @@ The application keeps the user experience small and predictable:
 
 The current implementation edits after the hotkey is released. It does not
 stream partial text into the target field while the microphone is still open.
+
+## Job lifecycle
+
+Every workflow execution can have a durable request ID and status:
+
+```text
+accepted -> processing -> completed
+                     \-> discarded
+                     \-> failed
+```
+
+The local implementation stores job status in SQLite. A cloud deployment can
+use the same application port with a PostgreSQL repository and a Pub/Sub or
+Cloud Tasks worker. The API exposes `POST /jobs` and `GET /jobs/{request_id}`
+so clients can reconnect and retrieve a result after a process or network
+restart.
+
+## Deployment configuration
+
+Deployment settings are separate from user preferences. `RuntimeSettings`
+reads environment variables such as `VOICEFLOW_DATABASE_URL`,
+`VOICEFLOW_TRANSCRIPTION_PROVIDER`, `VOICEFLOW_CLEANUP_PROVIDER`, and
+`VOICEFLOW_QUEUE_BACKEND`. Local defaults remain unchanged; hosted values can
+be supplied by a container platform and secrets manager.
 
 ## Design patterns
 

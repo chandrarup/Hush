@@ -20,6 +20,7 @@ import asyncio
 import json
 import pathlib
 import threading
+import uuid
 from typing import Any
 
 try:
@@ -33,6 +34,8 @@ except ImportError:
     _FASTAPI_OK = False
 
 from ..core import history as _history
+from ..core.jobs import SQLiteJobRepository
+from ..config.loader import update_config_value
 from ..config.snippets import (
     SNIPPETS_PATH,
     add_snippet,
@@ -59,6 +62,7 @@ def update_state(**kwargs):
 _subscribers: list[asyncio.Queue] = []
 _sub_lock = threading.Lock()
 _event_loop: asyncio.AbstractEventLoop | None = None
+_jobs = SQLiteJobRepository()
 
 
 def push_event(event: dict):
@@ -132,6 +136,23 @@ if _FASTAPI_OK:
     @app.get("/status")
     async def get_status():
         return dict(_state)
+
+    @app.post("/jobs")
+    async def create_job(request: Request):
+        """Accept a durable job request for local or future cloud workers."""
+        data = await request.json()
+        request_id = str(data.get("request_id") or uuid.uuid4().hex).strip()
+        if not request_id:
+            return JSONResponse({"error": "request_id cannot be empty."}, status_code=400)
+        job = _jobs.create(request_id, user_id=data.get("user_id"))
+        return _job_payload(job)
+
+    @app.get("/jobs/{request_id}")
+    async def get_job(request_id: str):
+        job = _jobs.get(request_id)
+        if job is None:
+            return JSONResponse({"error": "Job not found."}, status_code=404)
+        return _job_payload(job)
 
     @app.post("/settings")
     async def post_settings(request: Request):
@@ -239,14 +260,24 @@ if _FASTAPI_OK:
 def _persist_cleanup_level(level: str):
     """Write cleanup_level back to ~/.voiceflow/config.toml."""
     try:
-        import toml
-        config_path = pathlib.Path.home() / ".voiceflow" / "config.toml"
-        cfg = toml.load(str(config_path)) if config_path.exists() else {}
-        cfg.setdefault("llm", {})["cleanup_level"] = level
-        with open(config_path, "w") as f:
-            toml.dump(cfg, f)
+        update_config_value("llm", "cleanup_level", level)
     except Exception as e:
         print(f"[api] Could not persist cleanup_level: {e}")
+
+
+def _job_payload(job) -> dict[str, Any]:
+    """Serialize a job without exposing implementation-specific objects."""
+    return {
+        "request_id": job.request_id,
+        "status": job.status.value,
+        "user_id": job.user_id,
+        "raw_text": job.raw_text,
+        "clean_text": job.clean_text,
+        "entry_id": job.entry_id,
+        "error": job.error,
+        "created_at": job.created_at.isoformat() if job.created_at else None,
+        "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+    }
 
 
 # ── Server launcher ────────────────────────────────────────────────── #
