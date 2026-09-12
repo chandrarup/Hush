@@ -16,12 +16,20 @@ import sys
 import os
 import time
 import threading
+from datetime import datetime
 import numpy as np
 
-from ..config import load_config, load_snippets, load_vocab
-from ..config.snippets import expand_snippets, is_exact_shortcut
+from ..config import load_config, load_vocab
+from ..application.adapters import (
+    CallbackEventPublisher,
+    CallableCleaner,
+    LocalAudioPreprocessor,
+    LocalHistoryRepository,
+    LocalSnippetExpander,
+)
+from ..application.models import DictationStatus
+from ..application.workflow import DictationWorkflow
 from ..core.audio import AudioRecorder
-from ..core.vad import trim_silence, audio_duration
 from ..core.transcriber import create_transcriber
 from ..core.cleaner import clean_transcript, set_docker_llm_available
 from ..core import history as _history
@@ -36,12 +44,11 @@ try:
 except ImportError:
     _PYNPUT = False
 
-MIN_AUDIO_SECONDS = 0.3
-
 # ── Globals ───────────────────────────────────────────────────────── #
 _config: dict           = {}
 _vocab:  list[str]      = []
 _transcriber            = None
+_workflow               = None
 _recorder: AudioRecorder | None = None
 _hotkey_target          = None
 _hotkey_pressed         = False
@@ -115,6 +122,24 @@ def _keys_match(key, target) -> bool:
 #  Pipeline                                                             #
 # ──────────────────────────────────────────────────────────────────── #
 
+def _publish_dashboard_event(event: dict) -> None:
+    """Translate application events to the local dashboard event contract."""
+    if event.get("type") == "dictation_completed":
+        _api.push_event({
+            "type": "new_entry",
+            "entry": {
+                "id": event.get("entry_id"),
+                "ts": datetime.now().isoformat(timespec="seconds"),
+                "raw": event.get("raw", ""),
+                "clean": event.get("clean", ""),
+                "level": event.get("level", "light"),
+                "app": event.get("app"),
+                "words": event.get("words", 0),
+            },
+        })
+    else:
+        _api.push_event(event)
+
 def _run_pipeline(audio: np.ndarray, app_context: dict):
     if not _pipeline_lock.acquire(blocking=False):
         print("[main] Pipeline busy - skipping this recording.")
@@ -123,71 +148,36 @@ def _run_pipeline(audio: np.ndarray, app_context: dict):
     tray = _platform.tray.get_tray()
     try:
         tray.set_state("processing")
-
-        # 1. VAD trim
-        audio = trim_silence(audio)
-        if audio_duration(audio) < MIN_AUDIO_SECONDS:
-            print("[main] Audio too short - discarding.")
+        if _workflow is None:
+            print("[main] Dictation workflow not ready.")
             return
 
-        # 2. Transcribe
-        if _transcriber is None:
-            print("[main] Transcriber not ready.")
-            return
-        raw_text = _transcriber.transcribe(audio, vocab=_vocab)
-        if not raw_text or not raw_text.strip():
-            print("[main] Empty transcript - discarding.")
-            return
-
-        print(f"\n{'─'*55}")
-        print(f"  RAW  : {raw_text}")
-
-        # 3. LLM cleanup (context-aware)
         llm_cfg    = _config.get("llm", {})
         inject_cfg = _config.get("injection", {})
         active_app = app_context.get("app")
         level      = llm_cfg.get("cleanup_level", "light")
 
-        snippets = load_snippets()
-        snippet_text = expand_snippets(raw_text, snippets)
-        if snippet_text != raw_text and is_exact_shortcut(raw_text, snippets):
-            clean_text = snippet_text
-            print("  SNIPPET: expanded spoken shortcut")
-        else:
-            clean_text = clean_transcript(
-                snippet_text,
-                level            = level,
-                docker_llm_url   = llm_cfg.get("docker_llm_url",   "http://localhost:12434/engines/llama.cpp/v1"),
-                docker_llm_model = llm_cfg.get("docker_llm_model", ""),
-                ollama_model     = llm_cfg.get("ollama_model",     "llama3.2:3b"),
-                ollama_base_url  = llm_cfg.get("ollama_base_url",  "http://localhost:11434"),
-                temperature      = llm_cfg.get("temperature", 0.1),
-                max_tokens       = llm_cfg.get("max_tokens", 500),
-                app_context      = active_app,
-            )
+        result = _workflow.process(
+            audio,
+            vocab=_vocab,
+            cleanup_level=level,
+            app_context=active_app,
+        )
+        if result.status is DictationStatus.DISCARDED:
+            print("[main] Audio or transcript was empty - discarding.")
+            return
+        if result.status is DictationStatus.FAILED:
+            print(f"[main] Dictation failed: {result.error}")
+            return
 
+        raw_text = result.raw_text
+        clean_text = result.clean_text
+        print(f"\n{'─'*55}")
+        print(f"  RAW  : {raw_text}")
         print(f"  CLEAN: {clean_text}")
         print(f"{'─'*55}\n")
 
-        # 3b. Save to history + push live event
-        entry_id = _history.save_entry(
-            raw=raw_text, clean=clean_text,
-            level=level, app=active_app,
-        )
-        _api.push_event({
-            "type": "new_entry",
-            "entry": {
-                "id":    entry_id,
-                "ts":    __import__("datetime").datetime.now().isoformat(timespec="seconds"),
-                "raw":   raw_text,
-                "clean": clean_text,
-                "level": level,
-                "app":   active_app,
-                "words": len(clean_text.split()),
-            },
-        })
-
-        # 4. Inject text
+        # Desktop-only side effect: the application workflow has completed.
         _platform.text.inject_text(
             clean_text,
             preferred_method=inject_cfg.get("method", "auto"),
@@ -338,7 +328,7 @@ def _check_docker_llm(url: str):
 # ──────────────────────────────────────────────────────────────────── #
 
 def main():
-    global _config, _vocab, _transcriber, _recorder, _hotkey_target
+    global _config, _vocab, _transcriber, _workflow, _recorder, _hotkey_target
 
     print("=" * 60)
     print("  VoiceFlow - Local Push-to-Talk Dictation")
@@ -381,6 +371,27 @@ def main():
     except Exception as e:
         print(f"[main] FATAL: Audio recorder error: {e}")
         sys.exit(1)
+
+    # ── Application workflow ──────────────────────────────────────────
+    _workflow = DictationWorkflow(
+        preprocessor=LocalAudioPreprocessor(),
+        transcriber=_transcriber,
+        cleaner=CallableCleaner(
+            clean_transcript,
+            docker_llm_url=llm_cfg.get(
+                "docker_llm_url",
+                "http://localhost:12434/engines/llama.cpp/v1",
+            ),
+            docker_llm_model=llm_cfg.get("docker_llm_model", ""),
+            ollama_model=llm_cfg.get("ollama_model", "llama3.2:3b"),
+            ollama_base_url=llm_cfg.get("ollama_base_url", "http://localhost:11434"),
+            temperature=llm_cfg.get("temperature", 0.1),
+            max_tokens=llm_cfg.get("max_tokens", 500),
+        ),
+        history=LocalHistoryRepository(_history),
+        snippets=LocalSnippetExpander(),
+        events=CallbackEventPublisher(_publish_dashboard_event),
+    )
 
     # ── Hotkey ────────────────────────────────────────────────────────
     hk_cfg         = _config.get("hotkey", {})
