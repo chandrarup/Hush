@@ -46,6 +46,71 @@ Someone responsible for operating the cloud service, monitoring failures, contro
 | P2 | Important product expansion after the cloud foundation is stable. |
 | P3 | Optional future capability. |
 
+## Current implementation status
+
+The user stories are the target requirements. They are not all complete yet.
+The current branch has implemented the local architecture foundation and a
+cloud-ready backend seam, but it has not deployed a real GCP service.
+
+| Area | Status | Evidence or next step |
+| --- | --- | --- |
+| Dictation workflow extracted from desktop startup | Done | `voiceflow/application/workflow.py` and `DictationWorkflow` tests |
+| Local transcriber, cleaner, history, snippets, and events behind seams | Partial | Core seams exist; settings, text injection, and audio capture still need deeper ports |
+| Platform-specific desktop behavior isolated | Mostly done | `voiceflow/platform/` remains the desktop edge; continue removing orchestration from `main.py` |
+| Durable local job lifecycle | Done | SQLite job repository with idempotent completed-job retries |
+| Local thread dispatch seam | Done | `LocalThreadDispatcher`; replace later with a queue adapter |
+| Environment-based runtime configuration | Done | `RuntimeSettings.from_environment()` |
+| Backend-only HTTP application | Done as a local foundation | `voiceflow/web/cloud_api.py`; it still needs production storage and authentication |
+| PostgreSQL repository | Pending | Implement and contract-test before Cloud Run deployment |
+| Cloud Storage audio adapter | Pending | Add private, temporary object storage with retention rules |
+| Pub/Sub or Cloud Tasks adapter | Pending | Replace local dispatch for hosted workers |
+| Vertex AI Speech-to-Text and Gemini adapters | Pending | Implement behind existing provider ports |
+| Authentication and per-user ownership | Pending | Add Identity Platform or Firebase Authentication and enforce `user_id` server-side |
+| Observability, rate limits, secrets, and cost controls | Pending | Required before public exposure |
+| Mobile, live streaming, Command Mode, and team features | Future | P2 or P3 after the cloud foundation is stable |
+
+## What remains before GCP migration
+
+The next work should be completed in this order:
+
+1. Finish P0 modularity by extracting ports for audio capture, text injection,
+   settings, snippets, and clock/time handling.
+2. Add repository contract tests and a PostgreSQL implementation. Keep SQLite
+   as the local development implementation.
+3. Add database migrations and user ownership fields to history, jobs,
+   snippets, vocabulary, and settings.
+4. Add a real authentication adapter. Never trust a client-provided `user_id`.
+5. Add a temporary private audio storage adapter using Cloud Storage.
+6. Add a durable cloud dispatcher using Pub/Sub or Cloud Tasks and a separate
+   worker entry point.
+7. Add Vertex AI adapters for speech recognition and transcript cleanup while
+   retaining local Parakeet, Whisper, and Ollama adapters.
+8. Add container builds, `/health/live`, `/health/ready`, environment
+   configuration, Secret Manager integration, and CI deployment checks.
+9. Add structured logs, metrics, tracing, retry limits, dead-letter handling,
+   rate limits, and cost budgets.
+10. Deploy a private test environment, verify the desktop agent against it, and
+    only then expose the service publicly.
+
+## GCP target mapping
+
+| VoiceFlow capability | GCP target | Required code seam |
+| --- | --- | --- |
+| Backend API | Cloud Run | Backend-only FastAPI app factory |
+| Durable jobs | Pub/Sub or Cloud Tasks plus Cloud Run worker | `JobDispatcher` and `JobRepository` |
+| History and user data | Cloud SQL for PostgreSQL | `HistoryRepository` and repository migrations |
+| Temporary audio | Cloud Storage | `AudioStore` port and retention policy |
+| Speech recognition | Vertex AI Speech-to-Text | `Transcriber` port |
+| Cleanup and formatting | Vertex AI Gemini | `TranscriptCleaner` port |
+| Authentication | Identity Platform or Firebase Authentication | `Authenticator` port and user context |
+| Secrets | Secret Manager | Environment/configuration adapter |
+| Logs and metrics | Cloud Logging and Cloud Monitoring | Structured telemetry adapter |
+| Static dashboard | Firebase Hosting or Cloud Storage with CDN | Frontend deployment configuration |
+
+The desktop agent remains local. It owns the microphone, global hotkey,
+focused-application context, native permissions, tray icon, and final text
+injection. Cloud Run cannot perform those desktop actions.
+
 # Epic 1: Modular and portable system design
 
 This epic is the first implementation priority. It ensures that application behavior is independent of the operating system, database, model provider, queue, and cloud vendor.
