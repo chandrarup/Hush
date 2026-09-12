@@ -164,6 +164,10 @@ notification_duration = 3
 dashboard_port = 57327
 ```
 
+Transcription history is stored locally at `data/history.db` inside the
+repository. The database is runtime data and is ignored by Git; it is created
+automatically when VoiceFlow starts.
+
 ### ASR engine options
 
 | Engine | Best for | Notes |
@@ -235,7 +239,8 @@ voiceflow/
 │   └── main.py              # Application orchestration and runtime entry point
 ├── config/
 │   ├── defaults.py           # Default configuration values
-│   └── loader.py             # User config and vocabulary loading
+│   ├── loader.py             # User config and vocabulary loading
+│   └── paths.py              # Repository-local application data paths
 ├── prompts/
 │   └── cleanup.py            # Versioned LLM prompt catalog
 ├── core/
@@ -255,6 +260,9 @@ voiceflow/
 └── diagnostics/
     ├── permission_diagnostic.py # Interpreter and permission diagnostics
     └── hotkey_diagnostic.py     # Global keyboard event diagnostics
+
+data/
+└── history.db                    # Local SQLite transcription history (generated)
 
 docs/
 ├── setup.md                    # Detailed installation and macOS permissions

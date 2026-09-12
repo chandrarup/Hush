@@ -137,6 +137,10 @@ engine = "auto"
 method = "auto"
 ```
 
+The SQLite transcription history is stored at `data/history.db` inside the
+repository. The `data/` directory is created automatically and the database is
+ignored by Git because it contains runtime user data.
+
 ## 6. macOS Privacy Permissions
 
 Open:

@@ -31,13 +31,16 @@ build/
 *.swp
 *.swo
 
-# ── User data (stays in ~/.voiceflow, NOT in the repo) ───────────────────────
-# These are written at runtime into the user's home directory — never in repo:
+# ── User configuration (stays in ~/.voiceflow) ──────────────────────────────
+# These are written at runtime into the user's home directory:
 #   ~/.voiceflow/config.toml
-#   ~/.voiceflow/history.db
 #   ~/.voiceflow/.onboarded
 #   ~/.voiceflow/vocab.txt
 #   ~/.voiceflow/voiceflow.log
+
+# ── Application runtime data (repo-local, never commit) ────────────────────
+data/*.db
+data/*.db-*
 
 # ── Test & coverage ──────────────────────────────────────────────────────────
 .pytest_cache/

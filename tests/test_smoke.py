@@ -12,3 +12,10 @@ def test_platform_factory_routes_by_os():
     assert type(create_platform_services("Darwin")).__name__ == "MacOSPlatformServices"
     assert type(create_platform_services("Linux")).__name__ == "LinuxPlatformServices"
     assert type(create_platform_services("Windows")).__name__ == "WindowsPlatformServices"
+
+
+def test_history_database_is_repository_local():
+    from voiceflow.config.paths import HISTORY_DB_PATH, PROJECT_ROOT
+
+    assert HISTORY_DB_PATH == PROJECT_ROOT / "data" / "history.db"
+    assert HISTORY_DB_PATH.is_absolute()

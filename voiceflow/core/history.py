@@ -2,15 +2,18 @@
 history.py — SQLite transcription history store.
 
 Saves every transcription entry with timestamp, raw ASR output,
-LLM-cleaned output, cleanup level, and active app name.
+LLM-cleaned output, cleanup level, and active app name to ``data/history.db``.
 """
 
 import sqlite3
-import pathlib
-import json
 from datetime import datetime
 
-DB_PATH = pathlib.Path.home() / ".voiceflow" / "history.db"
+from voiceflow.config.paths import HISTORY_DB_PATH
+
+
+# Keep the existing module-level name for callers that inspect the database
+# location, while sourcing it from the centralized application path module.
+DB_PATH = HISTORY_DB_PATH
 
 
 def _conn() -> sqlite3.Connection:

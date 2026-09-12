@@ -49,6 +49,14 @@ Use `uv sync` to create or update `.venv` and `uv run` to execute application,
 diagnostic, and test commands. The installers and documentation intentionally
 do not maintain a second `requirements.txt` or invoke pip directly.
 
+## Application data paths
+
+`voiceflow.config.paths` centralizes paths owned by the application. User
+preferences remain in `~/.voiceflow`, while transcription history is stored at
+`data/history.db` relative to the repository root. The history module consumes
+that shared path instead of depending on the current working directory or
+embedding an absolute home-directory path.
+
 ## Design patterns
 
 ### Strategy
