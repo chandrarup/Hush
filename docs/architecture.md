@@ -40,6 +40,9 @@ PlatformServices  <-- stable capability contracts
 - `voiceflow/application/dispatch.py` is the execution seam. Local mode uses a
   daemon thread dispatcher; a hosted adapter can publish the same work to a
   durable queue.
+- `voiceflow/web/cloud_api.py` is a backend-only FastAPI application factory.
+  It has no desktop imports and receives its job repository through dependency
+  injection, making it suitable for a future container deployment.
 
 ## Application dependency management
 
