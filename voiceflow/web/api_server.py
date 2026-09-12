@@ -141,7 +141,8 @@ if _FASTAPI_OK:
     async def create_job(request: Request):
         """Accept a durable job request for local or future cloud workers."""
         data = await request.json()
-        request_id = str(data.get("request_id") or uuid.uuid4().hex).strip()
+        raw_request_id = data.get("request_id")
+        request_id = uuid.uuid4().hex if raw_request_id is None else str(raw_request_id).strip()
         if not request_id:
             return JSONResponse({"error": "request_id cannot be empty."}, status_code=400)
         job = _jobs.create(request_id, user_id=data.get("user_id"))

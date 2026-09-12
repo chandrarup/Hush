@@ -1,13 +1,16 @@
 from voiceflow.application.models import DictationStatus
-from voiceflow.application.jobs import JobStatus
+from voiceflow.application.jobs import DictationJob, JobClaim, JobStatus
 from voiceflow.application.workflow import DictationWorkflow
 
 
 class FakePreprocessor:
-    def __init__(self, prepared=True):
+    def __init__(self, prepared=True, error=None):
         self.prepared = prepared
+        self.error = error
 
     def prepare(self, audio):
+        if self.error:
+            raise self.error
         return audio if self.prepared else None
 
 
@@ -49,10 +52,13 @@ class FakeSnippets:
 
 
 class FakeEvents:
-    def __init__(self):
+    def __init__(self, error=None):
         self.events = []
+        self.error = error
 
     def publish(self, event):
+        if self.error:
+            raise self.error
         self.events.append(event)
 
 
@@ -65,18 +71,39 @@ class FakeJobs:
         if self.existing is not None:
             return self.existing
         self.statuses.append((request_id, JobStatus.ACCEPTED))
-        return type("Job", (), {"status": JobStatus.ACCEPTED})()
+        return DictationJob(request_id=request_id, status=JobStatus.ACCEPTED)
+
+    def claim_processing(self, request_id, claim_token):
+        job = DictationJob(
+            request_id=request_id,
+            status=JobStatus.PROCESSING,
+            claim_token=claim_token,
+        )
+        self.statuses.append((request_id, JobStatus.PROCESSING, {"claim_token": claim_token}))
+        return JobClaim(job=job, acquired=True)
 
     def update(self, request_id, status, **kwargs):
         self.statuses.append((request_id, status, kwargs))
 
+    def get_for_owner(self, request_id, user_id):
+        return self.existing
 
-def make_workflow(transcript="hello", *, snippets=None, cleaner=None, prepared=True, jobs=None):
+
+def make_workflow(
+    transcript="hello",
+    *,
+    snippets=None,
+    cleaner=None,
+    prepared=True,
+    preprocessor_error=None,
+    event_error=None,
+    jobs=None,
+):
     history = FakeHistory()
-    events = FakeEvents()
+    events = FakeEvents(error=event_error)
     cleaner = cleaner or FakeCleaner()
     workflow = DictationWorkflow(
-        preprocessor=FakePreprocessor(prepared),
+        preprocessor=FakePreprocessor(prepared, error=preprocessor_error),
         transcriber=FakeTranscriber(transcript),
         cleaner=cleaner,
         history=history,
@@ -165,3 +192,32 @@ def test_retrying_completed_job_returns_saved_result_without_duplicate_history()
     assert second.clean_text == first.clean_text
     assert len(history.entries) == 1
     assert len(cleaner.calls) == 1
+
+
+def test_preprocessor_failure_marks_job_failed():
+    jobs = FakeJobs()
+    workflow, _, history, _ = make_workflow(
+        jobs=jobs,
+        preprocessor_error=RuntimeError("audio preprocessing failed"),
+    )
+
+    result = workflow.process(object(), request_id="request-preprocess")
+
+    assert result.status is DictationStatus.FAILED
+    assert "preprocessing failed" in result.error
+    assert history.entries == []
+    assert jobs.statuses[-1][1] is JobStatus.FAILED
+
+
+def test_event_publisher_failure_does_not_change_completed_result_or_job():
+    jobs = FakeJobs()
+    workflow, _, history, _ = make_workflow(
+        jobs=jobs,
+        event_error=RuntimeError("subscriber disconnected"),
+    )
+
+    result = workflow.process(object(), request_id="request-event")
+
+    assert result.status is DictationStatus.COMPLETED
+    assert len(history.entries) == 1
+    assert jobs.statuses[-1][1] is JobStatus.COMPLETED

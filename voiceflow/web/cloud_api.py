@@ -2,7 +2,8 @@
 
 Unlike the local dashboard server, this module has no desktop, tray, keyboard,
 microphone, or operating-system permission imports. A deployment supplies a
-job repository adapter and can later add authentication and queue adapters.
+job repository and verified authentication adapters; queue and AI adapters can
+be added without importing desktop code.
 """
 
 import uuid
@@ -15,10 +16,11 @@ except ImportError:  # pragma: no cover - handled by deployment dependency check
     FastAPI = None
 
 from ..application.ports import JobRepository
+from ..application.auth import Authenticator
 
 
-def create_cloud_app(jobs: JobRepository):
-    """Create a stateless backend app around an injected job repository."""
+def create_cloud_app(jobs: JobRepository, authenticator: Authenticator):
+    """Create a stateless, authenticated backend app."""
     if FastAPI is None:
         raise RuntimeError("FastAPI is required to run the backend API.")
 
@@ -34,16 +36,26 @@ def create_cloud_app(jobs: JobRepository):
 
     @app.post("/jobs")
     async def create_job(request: Request):
+        principal = authenticator.authenticate(request.headers)
+        if principal is None:
+            return JSONResponse({"error": "Authentication required."}, status_code=401)
         data = await request.json()
-        request_id = str(data.get("request_id") or uuid.uuid4().hex).strip()
+        raw_request_id = data.get("request_id")
+        request_id = uuid.uuid4().hex if raw_request_id is None else str(raw_request_id).strip()
         if not request_id:
             return JSONResponse({"error": "request_id cannot be empty."}, status_code=400)
-        job = jobs.create(request_id, user_id=data.get("user_id"))
+        existing = jobs.get(request_id)
+        if existing is not None and existing.user_id != principal.subject:
+            return JSONResponse({"error": "Job not found."}, status_code=404)
+        job = jobs.create(request_id, user_id=principal.subject)
         return _job_payload(job)
 
     @app.get("/jobs/{request_id}")
-    async def get_job(request_id: str):
-        job = jobs.get(request_id)
+    async def get_job(request: Request, request_id: str):
+        principal = authenticator.authenticate(request.headers)
+        if principal is None:
+            return JSONResponse({"error": "Authentication required."}, status_code=401)
+        job = jobs.get_for_owner(request_id, principal.subject)
         if job is None:
             return JSONResponse({"error": "Job not found."}, status_code=404)
         return _job_payload(job)

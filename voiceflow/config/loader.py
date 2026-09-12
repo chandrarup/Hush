@@ -3,7 +3,9 @@ config.py - Loads ~/.voiceflow/config.toml and provides defaults.
 Creates the config file and vocab file if they do not exist.
 """
 
+import os
 import pathlib
+import tempfile
 import toml
 
 from .defaults import DEFAULT_CONFIG
@@ -15,8 +17,7 @@ VOCAB_PATH = CONFIG_DIR / "vocab.txt"
 def _write_default_config():
     """Write the default config to disk."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
-        toml.dump(DEFAULT_CONFIG, f)
+    _write_toml_atomically(DEFAULT_CONFIG)
     print(f"[config] Created default config at {CONFIG_PATH}")
 
 
@@ -84,5 +85,28 @@ def update_config_value(section: str, key: str, value) -> None:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     config = toml.load(str(CONFIG_PATH)) if CONFIG_PATH.exists() else {}
     config.setdefault(section, {})[key] = value
-    with CONFIG_PATH.open("w", encoding="utf-8") as handle:
-        toml.dump(config, handle)
+    _write_toml_atomically(config)
+
+
+def _write_toml_atomically(config: dict) -> None:
+    """Write TOML beside the destination, then replace it atomically."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path: str | None = None
+    file_descriptor, temp_path = tempfile.mkstemp(
+        dir=CONFIG_DIR,
+        prefix=f".{CONFIG_PATH.name}.",
+        suffix=".tmp",
+    )
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+            toml.dump(config, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, CONFIG_PATH)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass

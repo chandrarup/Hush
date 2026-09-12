@@ -23,5 +23,14 @@ class DictationJob:
     clean_text: str | None = None
     entry_id: int | None = None
     error: str | None = None
+    claim_token: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class JobClaim:
+    """Result of an atomic attempt to acquire a job for processing."""
+
+    job: DictationJob
+    acquired: bool

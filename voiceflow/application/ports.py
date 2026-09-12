@@ -8,7 +8,7 @@ in a hosted deployment.
 from collections.abc import Sequence
 from typing import Any, Protocol
 
-from .jobs import DictationJob, JobStatus
+from .jobs import DictationJob, JobClaim, JobStatus
 
 
 AudioInput = Any
@@ -67,6 +67,10 @@ class JobRepository(Protocol):
 
     def get(self, request_id: str) -> DictationJob | None: ...
 
+    def get_for_owner(self, request_id: str, user_id: str) -> DictationJob | None: ...
+
+    def claim_processing(self, request_id: str, claim_token: str) -> JobClaim: ...
+
     def update(
         self,
         request_id: str,
@@ -76,6 +80,7 @@ class JobRepository(Protocol):
         clean_text: str | None = None,
         entry_id: int | None = None,
         error: str | None = None,
+        claim_token: str | None = None,
     ) -> DictationJob: ...
 
 

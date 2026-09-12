@@ -60,6 +60,7 @@ class DictationWorkflow:
         """
 
         request_id = request_id or uuid4().hex
+        claim_token = uuid4().hex if self._jobs is not None else None
         if self._jobs is not None:
             existing = self._jobs.create(request_id)
             if existing.status is JobStatus.COMPLETED:
@@ -71,17 +72,24 @@ class DictationWorkflow:
                     entry_id=existing.entry_id,
                     cleanup_level=cleanup_level,
                 )
-            self._jobs.update(request_id, JobStatus.PROCESSING)
-
-        prepared = self._preprocessor.prepare(audio)
-        if prepared is None:
-            self._update_job(request_id, JobStatus.DISCARDED)
-            return self._result(request_id, DictationStatus.DISCARDED)
+            claim = self._jobs.claim_processing(request_id, claim_token)
+            if not claim.acquired:
+                return self._result(
+                    request_id,
+                    DictationStatus.FAILED,
+                    cleanup_level=cleanup_level,
+                    error="dictation job is already being processed",
+                )
 
         try:
+            prepared = self._preprocessor.prepare(audio)
+            if prepared is None:
+                self._update_job(request_id, JobStatus.DISCARDED, claim_token=claim_token)
+                return self._result(request_id, DictationStatus.DISCARDED)
+
             raw_text = self._transcriber.transcribe(prepared, vocab=vocab).strip()
             if not raw_text:
-                self._update_job(request_id, JobStatus.DISCARDED)
+                self._update_job(request_id, JobStatus.DISCARDED, claim_token=claim_token)
                 return self._result(request_id, DictationStatus.DISCARDED)
 
             expanded_text, was_exact_snippet = self._snippets.expand(raw_text)
@@ -115,8 +123,9 @@ class DictationWorkflow:
                 raw_text=raw_text,
                 clean_text=clean_text,
                 entry_id=entry_id,
+                claim_token=claim_token,
             )
-            self._publish_result(result)
+            self._publish_result_safely(result)
             return result
         except Exception as exc:
             result = self._result(
@@ -126,8 +135,13 @@ class DictationWorkflow:
                 cleanup_level=cleanup_level,
                 error=str(exc),
             )
-            self._update_job(request_id, JobStatus.FAILED, error=str(exc))
-            self._publish_result(result)
+            self._update_job(
+                request_id,
+                JobStatus.FAILED,
+                error=str(exc),
+                claim_token=claim_token,
+            )
+            self._publish_result_safely(result)
             return result
 
     def _update_job(self, request_id: str, status: JobStatus, **kwargs) -> None:
@@ -158,3 +172,12 @@ class DictationWorkflow:
                 "words": len(result.clean_text.split()),
             }
         )
+
+    def _publish_result_safely(self, result: DictationResult) -> None:
+        try:
+            self._publish_result(result)
+        except Exception as exc:
+            # Publishing is best effort. The durable result has already been
+            # written and must not be changed to failed because a subscriber
+            # disconnected or an event transport was unavailable.
+            print(f"[workflow] Event publication failed: {exc}")

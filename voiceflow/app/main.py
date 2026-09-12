@@ -127,7 +127,10 @@ def _keys_match(key, target) -> bool:
 
 def _publish_dashboard_event(event: dict) -> None:
     """Translate application events to the local dashboard event contract."""
-    if event.get("type") == "dictation_completed":
+    if (
+        event.get("type") == "dictation_completed"
+        and event.get("status") == DictationStatus.COMPLETED.value
+    ):
         _api.push_event({
             "type": "new_entry",
             "entry": {

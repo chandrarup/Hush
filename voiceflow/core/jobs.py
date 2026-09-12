@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..application.jobs import DictationJob, JobStatus
+from ..application.jobs import DictationJob, JobClaim, JobStatus
 from ..config.paths import HISTORY_DB_PATH
 
 
@@ -33,11 +33,17 @@ class SQLiteJobRepository:
                     clean_text TEXT,
                     entry_id INTEGER,
                     error TEXT,
+                    claim_token TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
                 """
             )
+            columns = {
+                row[1] for row in connection.execute("PRAGMA table_info(dictation_jobs)")
+            }
+            if "claim_token" not in columns:
+                connection.execute("ALTER TABLE dictation_jobs ADD COLUMN claim_token TEXT")
             connection.commit()
 
     def create(self, request_id: str, user_id: str | None = None) -> DictationJob:
@@ -65,6 +71,52 @@ class SQLiteJobRepository:
             ).fetchone()
         return _row_to_job(row) if row else None
 
+    def get_for_owner(self, request_id: str, user_id: str) -> DictationJob | None:
+        with self._conn() as connection:
+            row = connection.execute(
+                """
+                SELECT * FROM dictation_jobs
+                 WHERE request_id = ? AND user_id = ?
+                """,
+                (request_id, user_id),
+            ).fetchone()
+        return _row_to_job(row) if row else None
+
+    def claim_processing(self, request_id: str, claim_token: str) -> JobClaim:
+        """Atomically claim an accepted or unclaimed processing job."""
+        with self._conn() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM dictation_jobs WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"Unknown dictation job: {request_id}")
+
+            status = JobStatus(row["status"])
+            token_owned_by_other = (
+                status is JobStatus.PROCESSING
+                and row["claim_token"]
+                and row["claim_token"] != claim_token
+            )
+            eligible = status in {JobStatus.ACCEPTED, JobStatus.PROCESSING}
+            acquired = eligible and not token_owned_by_other
+            if acquired:
+                connection.execute(
+                    """
+                    UPDATE dictation_jobs
+                       SET status = ?, claim_token = ?, updated_at = ?
+                     WHERE request_id = ?
+                    """,
+                    (JobStatus.PROCESSING.value, claim_token, _now(), request_id),
+                )
+            connection.commit()
+
+        job = self.get(request_id)
+        if job is None:
+            raise KeyError(f"Unknown dictation job: {request_id}")
+        return JobClaim(job=job, acquired=acquired)
+
     def update(
         self,
         request_id: str,
@@ -74,6 +126,7 @@ class SQLiteJobRepository:
         clean_text: str | None = None,
         entry_id: int | None = None,
         error: str | None = None,
+        claim_token: str | None = None,
     ) -> DictationJob:
         now = _now()
         with self._conn() as connection:
@@ -83,8 +136,10 @@ class SQLiteJobRepository:
                    SET status = ?, raw_text = COALESCE(?, raw_text),
                        clean_text = COALESCE(?, clean_text),
                        entry_id = COALESCE(?, entry_id),
-                       error = ?, updated_at = ?
+                       error = ?, claim_token = COALESCE(?, claim_token),
+                       updated_at = ?
                  WHERE request_id = ?
+                   AND (? IS NULL OR claim_token = ?)
                 """,
                 (
                     status.value,
@@ -92,8 +147,11 @@ class SQLiteJobRepository:
                     clean_text,
                     entry_id,
                     error,
+                    claim_token,
                     now,
                     request_id,
+                    claim_token,
+                    claim_token,
                 ),
             )
             connection.commit()
@@ -124,6 +182,7 @@ def _row_to_job(row: sqlite3.Row) -> DictationJob:
         clean_text=row["clean_text"],
         entry_id=row["entry_id"],
         error=row["error"],
+        claim_token=row["claim_token"],
         created_at=_parse_timestamp(row["created_at"]),
         updated_at=_parse_timestamp(row["updated_at"]),
     )
