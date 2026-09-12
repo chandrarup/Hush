@@ -37,6 +37,9 @@ PlatformServices  <-- stable capability contracts
   durable job model, and ports that local and hosted adapters must satisfy.
 - `voiceflow/core/jobs.py` is the local SQLite job adapter. A hosted
   PostgreSQL or cloud-job adapter can replace it without changing the workflow.
+- `voiceflow/application/dispatch.py` is the execution seam. Local mode uses a
+  daemon thread dispatcher; a hosted adapter can publish the same work to a
+  durable queue.
 
 ## Application dependency management
 

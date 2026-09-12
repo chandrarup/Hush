@@ -2,6 +2,7 @@
 
 from .jobs import DictationJob, JobStatus
 from .models import DictationResult, DictationStatus
+from .dispatch import JobDispatcher, LocalThreadDispatcher
 from .workflow import DictationWorkflow
 
 __all__ = [
@@ -9,5 +10,7 @@ __all__ = [
     "DictationResult",
     "DictationStatus",
     "DictationWorkflow",
+    "JobDispatcher",
     "JobStatus",
+    "LocalThreadDispatcher",
 ]

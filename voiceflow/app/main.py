@@ -27,6 +27,7 @@ from ..application.adapters import (
     LocalHistoryRepository,
     LocalSnippetExpander,
 )
+from ..application.dispatch import JobDispatcher, LocalThreadDispatcher
 from ..application.models import DictationStatus
 from ..application.workflow import DictationWorkflow
 from ..core.audio import AudioRecorder
@@ -50,6 +51,7 @@ _config: dict           = {}
 _vocab:  list[str]      = []
 _transcriber            = None
 _workflow               = None
+_job_dispatcher: JobDispatcher = LocalThreadDispatcher()
 _recorder: AudioRecorder | None = None
 _hotkey_target          = None
 _hotkey_pressed         = False
@@ -244,10 +246,7 @@ def _on_release(key):
     audio   = _recorder.stop()
     context = dict(_captured_context)
 
-    threading.Thread(
-        target=_run_pipeline, args=(audio, context),
-        daemon=True, name="pipeline"
-    ).start()
+    _job_dispatcher.dispatch(_run_pipeline, audio, context)
 
 
 # ──────────────────────────────────────────────────────────────────── #
