@@ -8,6 +8,8 @@ in a hosted deployment.
 from collections.abc import Sequence
 from typing import Any, Protocol
 
+from .jobs import DictationJob, JobStatus
+
 
 AudioInput = Any
 
@@ -56,6 +58,25 @@ class HistoryRepository(Protocol):
         level: str = "light",
         app: str | None = None,
     ) -> int: ...
+
+
+class JobRepository(Protocol):
+    """Persist job lifecycle state outside the worker process."""
+
+    def create(self, request_id: str, user_id: str | None = None) -> DictationJob: ...
+
+    def get(self, request_id: str) -> DictationJob | None: ...
+
+    def update(
+        self,
+        request_id: str,
+        status: JobStatus,
+        *,
+        raw_text: str | None = None,
+        clean_text: str | None = None,
+        entry_id: int | None = None,
+        error: str | None = None,
+    ) -> DictationJob: ...
 
 
 class EventPublisher(Protocol):

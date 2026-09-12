@@ -30,6 +30,7 @@ from ..application.adapters import (
 from ..application.models import DictationStatus
 from ..application.workflow import DictationWorkflow
 from ..core.audio import AudioRecorder
+from ..core.jobs import SQLiteJobRepository
 from ..core.transcriber import create_transcriber
 from ..core.cleaner import clean_transcript, set_docker_llm_available
 from ..core import history as _history
@@ -391,6 +392,7 @@ def main():
         history=LocalHistoryRepository(_history),
         snippets=LocalSnippetExpander(),
         events=CallbackEventPublisher(_publish_dashboard_event),
+        jobs=SQLiteJobRepository(),
     )
 
     # ── Hotkey ────────────────────────────────────────────────────────

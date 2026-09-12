@@ -8,12 +8,14 @@ workers can all use the same interface.
 from datetime import datetime
 from uuid import uuid4
 
+from .jobs import JobStatus
 from .models import DictationResult, DictationStatus
 from .ports import (
     AudioInput,
     AudioPreprocessor,
     EventPublisher,
     HistoryRepository,
+    JobRepository,
     SnippetExpander,
     TranscriptCleaner,
     Transcriber,
@@ -32,6 +34,7 @@ class DictationWorkflow:
         history: HistoryRepository,
         snippets: SnippetExpander,
         events: EventPublisher | None = None,
+        jobs: JobRepository | None = None,
     ) -> None:
         self._preprocessor = preprocessor
         self._transcriber = transcriber
@@ -39,6 +42,7 @@ class DictationWorkflow:
         self._history = history
         self._snippets = snippets
         self._events = events
+        self._jobs = jobs
 
     def process(
         self,
@@ -56,13 +60,19 @@ class DictationWorkflow:
         """
 
         request_id = request_id or uuid4().hex
+        if self._jobs is not None:
+            self._jobs.create(request_id)
+            self._jobs.update(request_id, JobStatus.PROCESSING)
+
         prepared = self._preprocessor.prepare(audio)
         if prepared is None:
+            self._update_job(request_id, JobStatus.DISCARDED)
             return self._result(request_id, DictationStatus.DISCARDED)
 
         try:
             raw_text = self._transcriber.transcribe(prepared, vocab=vocab).strip()
             if not raw_text:
+                self._update_job(request_id, JobStatus.DISCARDED)
                 return self._result(request_id, DictationStatus.DISCARDED)
 
             expanded_text, was_exact_snippet = self._snippets.expand(raw_text)
@@ -90,6 +100,13 @@ class DictationWorkflow:
                 app_context=app_context,
                 cleanup_level=cleanup_level,
             )
+            self._update_job(
+                request_id,
+                JobStatus.COMPLETED,
+                raw_text=raw_text,
+                clean_text=clean_text,
+                entry_id=entry_id,
+            )
             self._publish_result(result)
             return result
         except Exception as exc:
@@ -100,8 +117,13 @@ class DictationWorkflow:
                 cleanup_level=cleanup_level,
                 error=str(exc),
             )
+            self._update_job(request_id, JobStatus.FAILED, error=str(exc))
             self._publish_result(result)
             return result
+
+    def _update_job(self, request_id: str, status: JobStatus, **kwargs) -> None:
+        if self._jobs is not None:
+            self._jobs.update(request_id, status, **kwargs)
 
     def _result(self, request_id: str, status: DictationStatus, **kwargs) -> DictationResult:
         return DictationResult(

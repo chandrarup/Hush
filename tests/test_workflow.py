@@ -1,4 +1,5 @@
 from voiceflow.application.models import DictationStatus
+from voiceflow.application.jobs import JobStatus
 from voiceflow.application.workflow import DictationWorkflow
 
 
@@ -55,7 +56,18 @@ class FakeEvents:
         self.events.append(event)
 
 
-def make_workflow(transcript="hello", *, snippets=None, cleaner=None, prepared=True):
+class FakeJobs:
+    def __init__(self):
+        self.statuses = []
+
+    def create(self, request_id, user_id=None):
+        self.statuses.append((request_id, JobStatus.ACCEPTED))
+
+    def update(self, request_id, status, **kwargs):
+        self.statuses.append((request_id, status, kwargs))
+
+
+def make_workflow(transcript="hello", *, snippets=None, cleaner=None, prepared=True, jobs=None):
     history = FakeHistory()
     events = FakeEvents()
     cleaner = cleaner or FakeCleaner()
@@ -66,6 +78,7 @@ def make_workflow(transcript="hello", *, snippets=None, cleaner=None, prepared=T
         history=history,
         snippets=snippets or FakeSnippets(),
         events=events,
+        jobs=jobs,
     )
     return workflow, cleaner, history, events
 
@@ -114,3 +127,15 @@ def test_short_or_silent_audio_is_discarded_without_side_effects():
     assert cleaner.calls == []
     assert history.entries == []
     assert events.events == []
+
+
+def test_workflow_updates_durable_job_lifecycle():
+    jobs = FakeJobs()
+    workflow, _, _, _ = make_workflow(jobs=jobs)
+
+    result = workflow.process(object(), request_id="request-2")
+
+    assert result.status is DictationStatus.COMPLETED
+    assert jobs.statuses[0] == ("request-2", JobStatus.ACCEPTED)
+    assert jobs.statuses[1][1] is JobStatus.PROCESSING
+    assert jobs.statuses[2][1] is JobStatus.COMPLETED
