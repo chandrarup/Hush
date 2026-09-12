@@ -61,7 +61,16 @@ class DictationWorkflow:
 
         request_id = request_id or uuid4().hex
         if self._jobs is not None:
-            self._jobs.create(request_id)
+            existing = self._jobs.create(request_id)
+            if existing.status is JobStatus.COMPLETED:
+                return self._result(
+                    request_id,
+                    DictationStatus.COMPLETED,
+                    raw_text=existing.raw_text or "",
+                    clean_text=existing.clean_text or "",
+                    entry_id=existing.entry_id,
+                    cleanup_level=cleanup_level,
+                )
             self._jobs.update(request_id, JobStatus.PROCESSING)
 
         prepared = self._preprocessor.prepare(audio)

@@ -59,9 +59,13 @@ class FakeEvents:
 class FakeJobs:
     def __init__(self):
         self.statuses = []
+        self.existing = None
 
     def create(self, request_id, user_id=None):
+        if self.existing is not None:
+            return self.existing
         self.statuses.append((request_id, JobStatus.ACCEPTED))
+        return type("Job", (), {"status": JobStatus.ACCEPTED})()
 
     def update(self, request_id, status, **kwargs):
         self.statuses.append((request_id, status, kwargs))
@@ -139,3 +143,25 @@ def test_workflow_updates_durable_job_lifecycle():
     assert jobs.statuses[0] == ("request-2", JobStatus.ACCEPTED)
     assert jobs.statuses[1][1] is JobStatus.PROCESSING
     assert jobs.statuses[2][1] is JobStatus.COMPLETED
+
+
+def test_retrying_completed_job_returns_saved_result_without_duplicate_history():
+    jobs = FakeJobs()
+    workflow, cleaner, history, _ = make_workflow(jobs=jobs)
+    first = workflow.process(object(), request_id="request-3")
+
+    jobs.existing = type(
+        "CompletedJob",
+        (),
+        {
+            "status": JobStatus.COMPLETED,
+            "raw_text": first.raw_text,
+            "clean_text": first.clean_text,
+            "entry_id": first.entry_id,
+        },
+    )()
+    second = workflow.process(object(), request_id="request-3")
+
+    assert second.clean_text == first.clean_text
+    assert len(history.entries) == 1
+    assert len(cleaner.calls) == 1
