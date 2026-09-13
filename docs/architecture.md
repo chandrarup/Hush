@@ -21,8 +21,9 @@ PlatformServices  <-- stable capability contracts
 - `voiceflow/core/` contains recording, VAD, transcription, cleanup, and
   history logic. It must not import platform backends.
 - `voiceflow/config/snippets.py` owns the small, deep interface for loading,
-  saving, and expanding spoken shortcuts. The application calls it once at the
-  final pipeline seam, immediately before text injection.
+  saving, and expanding spoken shortcuts. The application checks for an exact
+  shortcut before cleanup, expands exact matches, and skips cleanup for them;
+  ordinary dictation continues through the cleanup adapter unchanged.
 - `voiceflow/app/` coordinates the workflow through `PlatformServices`; it
   does not contain OS-specific branches.
 - `voiceflow/platform/contracts.py` is the seam: it defines the small
@@ -81,9 +82,11 @@ The application keeps the user experience small and predictable:
 1. The global hotkey starts a platform-neutral recorder.
 2. Voice Activity Detection trims leading and trailing silence.
 3. The selected ASR adapter transcribes the complete recording.
-4. The cleanup module removes filler, resolves spoken self-corrections, and
-   applies punctuation according to the selected style.
-5. The snippet module expands an exact spoken shortcut.
+4. The snippet module checks the transcript for an exact spoken shortcut. An
+   exact match expands and skips cleanup; ordinary dictation is passed through
+   unchanged to the cleanup module.
+5. The cleanup module removes filler, resolves spoken self-corrections, and
+   applies punctuation according to the selected style for ordinary dictation.
 6. The platform text adapter injects the final text into the focused field.
 
 The current implementation edits after the hotkey is released. It does not
@@ -118,8 +121,6 @@ reads environment variables such as `VOICEFLOW_DATABASE_URL`,
 be supplied by a container platform and secrets manager.
 
 ## Design patterns
-
-### Strategy
 
 ### Strategy
 

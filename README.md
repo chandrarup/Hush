@@ -30,8 +30,9 @@ other places where you can type. No plugin is required.
 
 Create a snippet with a spoken shortcut such as `work intro`, then store the
 full text it should expand to. Say the shortcut by itself and VoiceFlow expands
-it before injection. Snippets are managed in the dashboard under Settings and
-stored locally in `~/.voiceflow/snippets.toml`.
+it before injection; a shortcut embedded in longer dictation is left unchanged.
+Snippets are managed in the dashboard under Settings and stored locally in
+`~/.voiceflow/snippets.toml`.
 
 The pipeline is:
 

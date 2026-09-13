@@ -16,10 +16,16 @@ def test_local_api_preserves_explicit_empty_request_id_for_validation(tmp_path, 
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             empty = await client.post("/jobs", json={"request_id": ""})
             generated = await client.post("/jobs", json={})
-        return empty, generated
+            malformed = await client.post(
+                "/snippets",
+                content=b"{",
+                headers={"content-type": "application/json"},
+            )
+        return empty, generated, malformed
 
-    empty, generated = asyncio.run(exercise())
+    empty, generated, malformed = asyncio.run(exercise())
 
     assert empty.status_code == 400
     assert generated.status_code == 200
     assert generated.json()["request_id"]
+    assert malformed.status_code == 400

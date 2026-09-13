@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import os
+import tempfile
 from typing import Any
 
 import toml
@@ -50,8 +52,25 @@ def load_snippets() -> list[dict[str, str]]:
 def _save(snippets: list[dict[str, str]]) -> list[dict[str, str]]:
     normalized = _normalise({"snippets": snippets})
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with SNIPPETS_PATH.open("w", encoding="utf-8") as handle:
-        toml.dump({"snippets": normalized}, handle)
+    temp_path: str | None = None
+    file_descriptor, temp_path = tempfile.mkstemp(
+        dir=CONFIG_DIR,
+        prefix=f".{SNIPPETS_PATH.name}.",
+        suffix=".tmp",
+    )
+    try:
+        with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:
+            toml.dump({"snippets": normalized}, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, SNIPPETS_PATH)
+        temp_path = None
+    finally:
+        if temp_path is not None:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
     return normalized
 
 

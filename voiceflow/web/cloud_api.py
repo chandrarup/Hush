@@ -6,6 +6,7 @@ job repository and verified authentication adapters; queue and AI adapters can
 be added without importing desktop code.
 """
 
+import json
 import uuid
 from typing import Any
 
@@ -39,7 +40,12 @@ def create_cloud_app(jobs: JobRepository, authenticator: Authenticator):
         principal = authenticator.authenticate(request.headers)
         if principal is None:
             return JSONResponse({"error": "Authentication required."}, status_code=401)
-        data = await request.json()
+        try:
+            data = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A JSON object is required."}, status_code=400)
         raw_request_id = data.get("request_id")
         request_id = uuid.uuid4().hex if raw_request_id is None else str(raw_request_id).strip()
         if not request_id:

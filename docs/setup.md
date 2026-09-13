@@ -154,9 +154,10 @@ Text to expand: Hi, I am Vishnu. I work on data and cloud applications.
 ```
 
 Save the snippet, focus any text field, hold the VoiceFlow hotkey, and say
-`work intro`. VoiceFlow expands the phrase before it injects the text. Snippets
-are stored locally in `~/.voiceflow/snippets.toml` and are reloaded for each
-recording.
+`work intro` by itself. VoiceFlow expands the phrase before it injects the text.
+Snippets do not expand when the shortcut appears inside longer or ordinary
+dictation. They are stored locally in `~/.voiceflow/snippets.toml` and reloaded
+for each recording.
 
 ## 6. macOS Privacy Permissions
 

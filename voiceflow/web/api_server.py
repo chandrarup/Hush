@@ -140,7 +140,12 @@ if _FASTAPI_OK:
     @app.post("/jobs")
     async def create_job(request: Request):
         """Accept a durable job request for local or future cloud workers."""
-        data = await request.json()
+        try:
+            data = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A JSON object is required."}, status_code=400)
         raw_request_id = data.get("request_id")
         request_id = uuid.uuid4().hex if raw_request_id is None else str(raw_request_id).strip()
         if not request_id:
@@ -157,7 +162,12 @@ if _FASTAPI_OK:
 
     @app.post("/settings")
     async def post_settings(request: Request):
-        data = await request.json()
+        try:
+            data = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A JSON object is required."}, status_code=400)
         allowed = {"cleanup_level", "hotkey", "asr_engine", "ollama_model"}
         for k, v in data.items():
             if k in allowed:
@@ -179,7 +189,10 @@ if _FASTAPI_OK:
 
     @app.post("/snippets")
     async def post_snippet(request: Request):
-        data = await request.json()
+        try:
+            data = await request.json()
+        except json.JSONDecodeError:
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
         if not isinstance(data, dict):
             return JSONResponse({"error": "A snippet object is required."}, status_code=400)
         try:
