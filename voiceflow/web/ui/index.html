@@ -218,6 +218,7 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .snippet-shortcut { min-width: 130px; color: var(--accent); font-family: 'SF Mono', monospace; }
 .snippet-text { flex: 1; color: var(--text-2); line-height: 1.4; white-space: pre-wrap; }
 .snippet-path { color: var(--text-3); font-size: 11px; margin-top: 8px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 /* ── Search bar ───────────────────────────────────────── */
 .search-bar {
@@ -323,15 +324,15 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
         </div>
         <div class="stats-bar">
           <div class="stat-item">
-            <div class="stat-val" id="stat-words">–</div>
+            <div class="stat-val" id="stat-words">-</div>
             <div class="stat-label">total words</div>
           </div>
           <div class="stat-item">
-            <div class="stat-val" id="stat-wpm">–</div>
+            <div class="stat-val" id="stat-wpm">-</div>
             <div class="stat-label">avg wpm</div>
           </div>
           <div class="stat-item">
-            <div class="stat-val" id="stat-days">–</div>
+            <div class="stat-val" id="stat-days">-</div>
             <div class="stat-label">days active</div>
           </div>
         </div>
@@ -340,9 +341,9 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
       <div class="banner">
         <div class="banner-text">
           <h2>Make VoiceFlow sound like <em>you</em></h2>
-          <p>Hold your hotkey, speak naturally — text appears instantly.</p>
+          <p>Hold your hotkey, speak naturally, and text appears instantly.</p>
         </div>
-        <div class="hotkey-badge" id="hotkey-badge">⌘ cmd_r</div>
+        <div class="hotkey-badge" id="hotkey-badge">Left Control</div>
       </div>
 
       <div id="home-feed"></div>
@@ -394,7 +395,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
         <div class="level-card" data-level="high">
           <h3>High</h3>
           <div class="level-desc">Rewrites for brevity and polish while keeping your meaning.</div>
-          <div class="level-preview">Let's meet at 3pm — thoughts?</div>
+          <div class="level-preview">Let's meet at 3pm, thoughts?</div>
         </div>
       </div>
     </div>
@@ -415,7 +416,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
             <div class="settings-row-sub">Currently configured in ~/.voiceflow/config.toml</div>
           </div>
           <div class="settings-control">
-            <span class="hotkey-display" id="hotkey-display">cmd_r</span>
+            <span class="hotkey-display" id="hotkey-display">Left Control</span>
           </div>
         </div>
       </div>
@@ -463,10 +464,14 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
             <div class="settings-row-sub">Example: “work intro” becomes your full introduction.</div>
           </div>
           <div class="settings-control snippet-form">
+            <label class="sr-only" for="snippet-name">Snippet name</label>
             <input id="snippet-name" type="text" placeholder="Name">
+            <label class="sr-only" for="snippet-shortcut">Spoken shortcut</label>
             <input id="snippet-shortcut" type="text" placeholder="Spoken shortcut">
+            <label class="sr-only" for="snippet-text">Text to expand</label>
             <textarea id="snippet-text" rows="2" placeholder="Text to expand"></textarea>
             <button class="btn primary" id="btn-add-snippet" type="button">Save snippet</button>
+            <button class="btn" id="btn-cancel-snippet-edit" type="button" hidden>Cancel</button>
           </div>
         </div>
         <div class="snippet-list" id="snippet-list"></div>
@@ -614,12 +619,14 @@ async function loadHome() {
       fetch(API+'/history?limit=50').then(r=>r.json()),
       fetch(API+'/status').then(r=>r.json()),
     ]);
+    allEntries = entries;
     document.getElementById('stat-words').textContent = stats.total_words >= 1000
       ? (stats.total_words/1000).toFixed(1)+'K' : stats.total_words;
-    document.getElementById('stat-wpm').textContent = stats.avg_wpm || '–';
+    document.getElementById('stat-wpm').textContent = stats.avg_wpm || '-';
     document.getElementById('stat-days').textContent = stats.active_days;
-    document.getElementById('hotkey-badge').textContent = '⌘ ' + (status.hotkey || 'cmd_r');
-    document.getElementById('hotkey-display').textContent = status.hotkey || 'cmd_r';
+    const hotkeyLabel = formatHotkey(status.hotkey || 'ctrl_l');
+    document.getElementById('hotkey-badge').textContent = hotkeyLabel;
+    document.getElementById('hotkey-display').textContent = hotkeyLabel;
     renderFeed(entries, document.getElementById('home-feed'), 30);
     // Sync level card
     setActiveLevel(status.cleanup_level || 'light');
@@ -659,20 +666,44 @@ document.getElementById('btn-clear-all').addEventListener('click', async () => {
 });
 
 // ── Snippets ────────────────────────────────────────────────────── //
+let snippetsCache = [];
+let editingSnippetIndex = null;
+
+function formatHotkey(value) {
+  const labels = {
+    ctrl_l: 'Left Control', ctrl_r: 'Right Control', ctrl: 'Control',
+    cmd_l: 'Left Command', cmd_r: 'Right Command', cmd: 'Command',
+    alt_l: 'Left Option', alt_r: 'Right Option', alt: 'Option',
+    shift_l: 'Left Shift', shift_r: 'Right Shift', shift: 'Shift',
+  };
+  return labels[value] || value;
+}
+
+function resetSnippetForm() {
+  editingSnippetIndex = null;
+  document.getElementById('snippet-name').value = '';
+  document.getElementById('snippet-shortcut').value = '';
+  document.getElementById('snippet-text').value = '';
+  document.getElementById('btn-add-snippet').textContent = 'Save snippet';
+  document.getElementById('btn-cancel-snippet-edit').hidden = true;
+}
+
 function renderSnippets(data) {
   const list = document.getElementById('snippet-list');
   const snippets = data.snippets || [];
+  snippetsCache = snippets;
   document.getElementById('snippet-path').textContent = data.path ? 'Stored locally at ' + data.path : '';
   if (!snippets.length) {
     list.innerHTML = '<div class="feed-empty">No snippets saved yet.</div>';
     return;
   }
   list.innerHTML = snippets.map(snippet => `
-    <div class="snippet-item">
+    <div class="snippet-item" data-snippet-version="${escHtml(snippet.version || '')}">
       <div class="snippet-name">${escHtml(snippet.name)}</div>
       <div class="snippet-shortcut">“${escHtml(snippet.shortcut)}”</div>
       <div class="snippet-text">${escHtml(snippet.text)}</div>
-      <button class="btn danger" type="button" onclick="removeSnippet(${snippet.index})">Remove</button>
+      <button class="btn" type="button" onclick="editSnippet(${snippet.index})">Edit</button>
+      <button class="btn danger" type="button" onclick="removeSnippet(${snippet.index}, '${snippet.version || ''}')">Remove</button>
     </div>`).join('');
 }
 
@@ -682,6 +713,7 @@ async function loadSnippets() {
     if (!response.ok) throw new Error('Could not load snippets');
     renderSnippets(await response.json());
   } catch (error) {
+    snippetsCache = [];
     document.getElementById('snippet-list').innerHTML = '<div class="feed-empty">Start VoiceFlow, then open http://localhost:57327/ to manage snippets.</div>';
     document.getElementById('snippet-path').textContent = '';
   }
@@ -695,25 +727,59 @@ document.getElementById('btn-add-snippet').addEventListener('click', async () =>
     alert('Enter a name, spoken shortcut, and expanded text.');
     return;
   }
-  const response = await fetch(API + '/snippets', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name, shortcut, text}),
-  });
-  if (!response.ok) {
-    alert((await response.json()).error || 'Could not save snippet.');
+  const isEditing = editingSnippetIndex !== null;
+  const endpoint = isEditing ? API + '/snippets/' + editingSnippetIndex : API + '/snippets';
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: isEditing ? 'PUT' : 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name, shortcut, text}),
+    });
+  } catch (error) {
+    alert('Could not save snippet. Check that VoiceFlow is running.');
     return;
   }
-  document.getElementById('snippet-name').value = '';
-  document.getElementById('snippet-shortcut').value = '';
-  document.getElementById('snippet-text').value = '';
-  loadSnippets();
+  if (!response.ok) {
+    let message = 'Could not save snippet.';
+    try { message = (await response.json()).error || message; } catch (error) {}
+    alert(message);
+    return;
+  }
+  resetSnippetForm();
+  await loadSnippets();
 });
 
-async function removeSnippet(index) {
-  const response = await fetch(API + '/snippets/' + index, {method: 'DELETE'});
-  if (!response.ok) alert('Could not remove snippet.');
-  loadSnippets();
+document.getElementById('btn-cancel-snippet-edit').addEventListener('click', resetSnippetForm);
+
+function editSnippet(index) {
+  const snippet = snippetsCache.find(item => item.index === index);
+  if (!snippet) return;
+  editingSnippetIndex = index;
+  document.getElementById('snippet-name').value = snippet.name;
+  document.getElementById('snippet-shortcut').value = snippet.shortcut;
+  document.getElementById('snippet-text').value = snippet.text;
+  document.getElementById('btn-add-snippet').textContent = 'Update snippet';
+  document.getElementById('btn-cancel-snippet-edit').hidden = false;
+  document.getElementById('snippet-name').focus();
+}
+
+async function removeSnippet(index, version) {
+  let response;
+  try {
+    response = await fetch(API + '/snippets/' + index + '?version=' + encodeURIComponent(version), {method: 'DELETE'});
+  } catch (error) {
+    alert('Could not remove snippet. Check that VoiceFlow is running.');
+    return;
+  }
+  if (!response.ok) {
+    let message = 'Could not remove snippet.';
+    try { message = (await response.json()).error || message; } catch (error) {}
+    alert(message);
+    await loadSnippets();
+    return;
+  }
+  await loadSnippets();
 }
 
 async function deleteEntry(id, btn) {
@@ -779,27 +845,36 @@ function updateStatusDot(status) {
 }
 
 // ── SSE live events ──────────────────────────────────────────────── //
+let eventSource = null;
+let reconnectTimer = null;
+
 function connectSSE() {
-  const es = new EventSource(API + '/events');
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource(API + '/events');
+  const es = eventSource;
   es.onmessage = e => {
     try {
       const event = JSON.parse(e.data);
       if (event.type === 'status') updateStatusDot(event.value);
       if (event.type === 'new_entry') {
+        if (!event.entry || event.entry.id == null || allEntries.some(entry => entry.id === event.entry.id)) return;
+        allEntries.unshift(event.entry);
         // Prepend to live feed if on home
         if (document.getElementById('page-home').classList.contains('active')) {
-          const feed = document.getElementById('home-feed');
-          const emptyMsg = feed.querySelector('.feed-empty');
-          if (emptyMsg) emptyMsg.remove();
-          const card = buildEntryCard(event.entry);
-          // Insert at top after any existing section label or at very top
-          feed.insertBefore(card, feed.firstChild);
+          renderFeed(allEntries, document.getElementById('home-feed'), 30);
         }
-        allEntries.unshift(event.entry);
       }
     } catch(err) { /* ignore parse errors */ }
   };
-  es.onerror = () => setTimeout(connectSSE, 3000); // reconnect
+  es.onerror = () => {
+    es.close();
+    if (eventSource === es) eventSource = null;
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connectSSE();
+    }, 3000);
+  };
 }
 
 // ── Boot ─────────────────────────────────────────────────────────── //

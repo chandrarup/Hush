@@ -30,14 +30,21 @@ except ImportError:
     _FASTAPI_OK = False
 
 from ..core import history as _history
-from ..config.snippets import SNIPPETS_PATH, add_snippet, load_snippets, remove_snippet
+from ..config.snippets import (
+    SNIPPETS_PATH,
+    add_snippet,
+    get_snippets_snapshot,
+    remove_snippet,
+    SnippetConflictError,
+    update_snippet,
+)
 from ..platform.factory import get_platform_services
 
 # ── Shared state (updated by main.py) ─────────────────────────────── #
 _state: dict[str, Any] = {
     "status":        "idle",       # idle | recording | processing
     "cleanup_level": "light",      # none | light | medium | high
-    "hotkey":        "cmd_r",
+    "hotkey":        "ctrl_l",
     "asr_engine":    "auto",
     "ollama_model":  "llama3.2:3b",
 }
@@ -139,12 +146,14 @@ if _FASTAPI_OK:
 
     @app.get("/snippets")
     async def get_snippets():
+        snippets, version = get_snippets_snapshot()
         return {
             "path": str(SNIPPETS_PATH),
             "snippets": [
-                {**snippet, "index": index}
-                for index, snippet in enumerate(load_snippets())
+                {**snippet, "index": index, "version": version}
+                for index, snippet in enumerate(snippets)
             ],
+            "version": version,
         }
 
     @app.post("/snippets")
@@ -165,10 +174,38 @@ if _FASTAPI_OK:
         except (AttributeError, TypeError, ValueError) as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
 
-    @app.delete("/snippets/{snippet_index}")
-    async def delete_snippet(snippet_index: int):
+    @app.put("/snippets/{snippet_index}")
+    async def put_snippet(snippet_index: int, request: Request):
         try:
-            return {"ok": True, "snippets": remove_snippet(snippet_index)}
+            data = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A snippet object is required."}, status_code=400)
+        try:
+            snippets = update_snippet(
+                snippet_index,
+                data.get("name", ""),
+                data.get("shortcut", ""),
+                data.get("text", ""),
+            )
+            return {"ok": True, "snippets": snippets}
+        except IndexError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        except (AttributeError, TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    @app.delete("/snippets/{snippet_index}")
+    async def delete_snippet(snippet_index: int, version: str | None = None):
+        if not version:
+            return JSONResponse(
+                {"error": "A snippet list version is required."},
+                status_code=428,
+            )
+        try:
+            return {"ok": True, "snippets": remove_snippet(snippet_index, version)}
+        except SnippetConflictError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
         except IndexError as exc:
             return JSONResponse({"error": str(exc)}, status_code=404)
 

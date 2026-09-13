@@ -24,13 +24,31 @@ def test_snippet_api_round_trip(tmp_path, monkeypatch):
                 },
             )
             listed = await client.get("/snippets")
-            removed = await client.delete("/snippets/0")
+            updated = await client.put(
+                "/snippets/0",
+                json={
+                    "name": "Updated greeting",
+                    "shortcut": "good morning",
+                    "text": "Good morning.",
+                },
+            )
+            listed_after_update = await client.get("/snippets")
+            stale_delete = await client.delete(
+                "/snippets/0",
+                params={"version": listed.json()["version"]},
+            )
+            removed = await client.delete(
+                "/snippets/0",
+                params={"version": listed_after_update.json()["version"]},
+            )
             malformed = await client.post("/snippets", content=b"\xff")
-        return created, listed, removed, malformed
+        return created, listed, updated, stale_delete, removed, malformed
 
-    created, listed, removed, malformed = asyncio.run(exercise())
+    created, listed, updated, stale_delete, removed, malformed = asyncio.run(exercise())
 
     assert created.status_code == 200
     assert listed.json()["snippets"][0]["shortcut"] == "hello"
+    assert updated.status_code == 200
+    assert stale_delete.status_code == 409
     assert removed.status_code == 200
     assert malformed.status_code == 400

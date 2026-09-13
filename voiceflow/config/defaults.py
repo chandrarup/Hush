@@ -2,7 +2,7 @@
 
 
 DEFAULT_CONFIG = {
-    "hotkey": {"key": "ctrl_r"},
+    "hotkey": {"key": "ctrl_l"},
     "asr": {
         "engine": "auto",
         "model": "",

@@ -82,8 +82,8 @@ def _resolve_hotkey(key_name: str):
         return special[k]
     if len(k) == 1:
         return k
-    print(f"[main] Unknown hotkey '{key_name}' — defaulting to Right Ctrl.")
-    return _kb.Key.ctrl_r
+    print(f"[main] Unknown hotkey '{key_name}' — defaulting to Left Ctrl.")
+    return _kb.Key.ctrl_l
 
 
 def _keys_match(key, target) -> bool:
@@ -383,7 +383,7 @@ def main():
 
     # ── Hotkey ────────────────────────────────────────────────────────
     hk_cfg         = _config.get("hotkey", {})
-    key_name       = hk_cfg.get("key", "ctrl_r")
+    key_name       = hk_cfg.get("key", "ctrl_l")
     _hotkey_target = _resolve_hotkey(key_name)
     print(f"[main] Hotkey target resolved to: {repr(_hotkey_target)}")
 

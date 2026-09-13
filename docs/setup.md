@@ -128,7 +128,7 @@ The current macOS defaults should include:
 
 ```toml
 [hotkey]
-key = "ctrl_r"
+key = "ctrl_l"
 
 [asr]
 engine = "auto"
@@ -240,7 +240,8 @@ the actual running process. Add Terminal, ChatGPT/Codex, and Python.app as
 described above, then quit and restart the terminal/app.
 
 Keyboard note: some macOS keyboards report Control as generic `Key.ctrl` instead
-of `Key.ctrl_r`. The app treats `ctrl`, `ctrl_l`, and `ctrl_r` as equivalent.
+of a side-specific key. The app treats `ctrl`, `ctrl_l`, and `ctrl_r` as
+equivalent, with `ctrl_l` as the default.
 
 ## 8. Verify ASR Dependencies
 
@@ -287,7 +288,7 @@ Expected startup signs:
 
 ```text
 [transcriber] Auto-selected engine: parakeet
-[main] Hotkey : ctrl_r
+[main] Hotkey : ctrl_l
 [main] Dashboard : http://localhost:57327
 [main] Ready - hold hotkey to record, release to transcribe.
 ```
