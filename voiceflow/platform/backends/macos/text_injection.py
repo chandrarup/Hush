@@ -94,12 +94,13 @@ class MacOSTextInjector:
 
 def check_accessibility_permission() -> bool:
     try:
-        from Quartz import AXIsProcessTrusted
+        from ApplicationServices import AXIsProcessTrusted
 
         trusted = bool(AXIsProcessTrusted())
         if not trusted:
             print("[permission] Accessibility is required for text injection.")
             print("[permission] System Settings -> Privacy & Security -> Accessibility")
         return trusted
-    except Exception:
-        return True
+    except Exception as exc:
+        print(f"[permission] Could not determine Accessibility status: {exc}")
+        return False

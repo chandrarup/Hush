@@ -164,41 +164,29 @@ Add and enable the process that launches VoiceFlow:
 If the `.venv/bin/python` files are greyed out in the picker, that is normal:
 they are symlinks. Use the real Python app bundle instead.
 
-First print the exact paths macOS is checking:
+Print the exact instructions and the Python.app folder for this specific Mac:
 
 ```bash
-uv run --no-dev python -m voiceflow.diagnostics.permission_diagnostic
+./lets-hush --permissions
 ```
 
-Look for:
-
-```text
-sys.executable
-Resolved real path
-```
-
-For Homebrew Python 3.12 on Apple Silicon, the selectable app is usually here:
-
-```text
-/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/Resources/Python.app
-```
+The command first explains how to add Terminal.app from the fixed folder
+`/System/Applications/Utilities`. It then finds the selectable Python.app behind
+the project's virtual environment and prints its parent folder. Do not guess or
+copy a Homebrew path from this guide: the version and location vary by Mac.
 
 In the macOS file picker:
 
 1. Click `+`.
 2. Press `Cmd+Shift+G`.
-3. Paste the parent folder:
-
-```text
-/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/Resources
-```
+3. Paste the exact Python.app parent folder printed by `./lets-hush --permissions`.
 
 4. Select `Python.app`.
 5. Turn the toggle on.
 
-If the Homebrew Python version is different, use the `Resolved real path` from
-`voiceflow.diagnostics.permission_diagnostic`, then go to that Python framework's `Resources` folder and
-select `Python.app`.
+If no Python.app path is printed, allow the app you use to start Hush first
+(Terminal, Codex, ChatGPT, VS Code, or iTerm). Do not try to select the greyed-out
+`.venv/bin/python` files.
 
 ### Accessibility
 
