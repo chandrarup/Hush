@@ -77,13 +77,16 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ### 3. Run the installer
 
-On macOS, use the project installer. It creates the virtual environment,
-installs dependencies, configures the LaunchAgent, and prints the required
-privacy-permission paths:
+On macOS, use the beginner-friendly project launcher. It runs the installer and
+then lets you reopen the exact permission instructions for your machine:
 
 ```bash
-bash install.sh
+./lets-hush
 ```
+
+After setup, use `./lets-hush --permissions` to print the Terminal and
+machine-specific Python.app paths to add in Accessibility and Input Monitoring.
+Use `./lets-hush --start` to launch Hush.
 
 For Ubuntu/Debian, the equivalent cross-platform helper is:
 

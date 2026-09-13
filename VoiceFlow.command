@@ -3,11 +3,17 @@
 # macOS recognises .command files and can run them from Finder / DMG
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$SCRIPT_DIR/.venv"
+for brew_bin in /opt/homebrew/bin /usr/local/bin; do
+  if [ -x "$brew_bin/brew" ]; then
+    export PATH="$brew_bin:$PATH"
+    break
+  fi
+done
 
-if [ ! -d "$VENV" ]; then
-  echo "VoiceFlow isn't installed yet."
-  echo "Please run install.sh first:"
-  echo "  bash \"$SCRIPT_DIR/install.sh\""
+if [ ! -x "$VENV/bin/python" ]; then
+  echo "Hush isn't installed yet."
+  echo "Run setup first:"
+  echo "  bash \"$SCRIPT_DIR/lets-hush\""
   read -p "Press any key to exit..." -n1
   exit 1
 fi

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Beginner-friendly macOS setup and launcher.
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="$REPO_DIR/.venv"
+usage() {
+  printf '%s\n' "Let's Hush." \
+    "Usage: ./lets-hush [--start | --permissions | --check | --help]" \
+    "  No option       Install Hush on this Mac" \
+    "  --start         Launch Hush" \
+    "  --permissions   Show the apps and paths to allow in System Settings" \
+    "  --check         Check dependencies without downloading models"
+}
+if [[ $# -gt 1 ]]; then usage >&2; exit 2; fi
+case "${1:-}" in
+  --help|-h) usage; exit 0 ;;
+  ''|--start|--permissions|--check) ;;
+  *) usage >&2; exit 2 ;;
+esac
+if [[ "$(uname -s)" != Darwin ]]; then
+  echo "This launcher is for macOS. See docs/setup.md for Linux; Windows setup is not supported yet." >&2
+  exit 1
+fi
+# Finder and fresh terminals may not have Homebrew on PATH yet.
+if ! command -v brew >/dev/null 2>&1; then
+  for brew_bin in /opt/homebrew/bin /usr/local/bin; do
+    if [[ -x "$brew_bin/brew" ]]; then
+      export PATH="$brew_bin:$PATH"
+      break
+    fi
+  done
+fi
+cd "$REPO_DIR"
+if [[ -n "${1:-}" ]]; then
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    echo "Hush needs setup first. Run: ./lets-hush" >&2
+    exit 1
+  fi
+  case "$1" in
+    --start) exec bash "$REPO_DIR/VoiceFlow.command" ;;
+    --permissions) exec "$VENV/bin/python" -m voiceflow.diagnostics.permission_diagnostic ;;
+    --check) exec "$VENV/bin/python" "$REPO_DIR/setup_check.py" ;;
+  esac
+fi
+
+printf "\nLet's Hush.\n\n"
+exec bash "$REPO_DIR/install.sh"
