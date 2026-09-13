@@ -30,6 +30,7 @@ except ImportError:
     _FASTAPI_OK = False
 
 from ..core import history as _history
+from ..config.snippets import SNIPPETS_PATH, add_snippet, load_snippets, remove_snippet
 from ..platform.factory import get_platform_services
 
 # ── Shared state (updated by main.py) ─────────────────────────────── #
@@ -135,6 +136,41 @@ if _FASTAPI_OK:
         if "cleanup_level" in data:
             _persist_cleanup_level(data["cleanup_level"])
         return {"ok": True, "state": dict(_state)}
+
+    @app.get("/snippets")
+    async def get_snippets():
+        return {
+            "path": str(SNIPPETS_PATH),
+            "snippets": [
+                {**snippet, "index": index}
+                for index, snippet in enumerate(load_snippets())
+            ],
+        }
+
+    @app.post("/snippets")
+    async def post_snippet(request: Request):
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A snippet object is required."}, status_code=400)
+        try:
+            snippets = add_snippet(
+                data.get("name", ""),
+                data.get("shortcut", ""),
+                data.get("text", ""),
+            )
+            return {"ok": True, "snippets": snippets}
+        except (AttributeError, TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    @app.delete("/snippets/{snippet_index}")
+    async def delete_snippet(snippet_index: int):
+        try:
+            return {"ok": True, "snippets": remove_snippet(snippet_index)}
+        except IndexError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
 
     @app.delete("/history")
     async def clear_history():

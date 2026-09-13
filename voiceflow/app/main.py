@@ -18,7 +18,8 @@ import time
 import threading
 import numpy as np
 
-from ..config import load_config, load_vocab
+from ..config import load_config, load_snippets, load_vocab
+from ..config.snippets import expand_snippets, is_exact_shortcut
 from ..core.audio import AudioRecorder
 from ..core.vad import trim_silence, audio_duration
 from ..core.transcriber import create_transcriber
@@ -147,17 +148,22 @@ def _run_pipeline(audio: np.ndarray, app_context: dict):
         active_app = app_context.get("app")
         level      = llm_cfg.get("cleanup_level", "light")
 
-        clean_text = clean_transcript(
-            raw_text,
-            level            = level,
-            docker_llm_url   = llm_cfg.get("docker_llm_url",   "http://localhost:12434/engines/llama.cpp/v1"),
-            docker_llm_model = llm_cfg.get("docker_llm_model", ""),
-            ollama_model     = llm_cfg.get("ollama_model",     "llama3.2:3b"),
-            ollama_base_url  = llm_cfg.get("ollama_base_url",  "http://localhost:11434"),
-            temperature      = llm_cfg.get("temperature", 0.1),
-            max_tokens       = llm_cfg.get("max_tokens", 500),
-            app_context      = active_app,
-        )
+        snippets = load_snippets()
+        if is_exact_shortcut(raw_text, snippets):
+            clean_text = expand_snippets(raw_text, snippets)
+            print("  SNIPPET: expanded spoken shortcut")
+        else:
+            clean_text = clean_transcript(
+                raw_text,
+                level            = level,
+                docker_llm_url   = llm_cfg.get("docker_llm_url",   "http://localhost:12434/engines/llama.cpp/v1"),
+                docker_llm_model = llm_cfg.get("docker_llm_model", ""),
+                ollama_model     = llm_cfg.get("ollama_model",     "llama3.2:3b"),
+                ollama_base_url  = llm_cfg.get("ollama_base_url",  "http://localhost:11434"),
+                temperature      = llm_cfg.get("temperature", 0.1),
+                max_tokens       = llm_cfg.get("max_tokens", 500),
+                app_context      = active_app,
+            )
 
         print(f"  CLEAN: {clean_text}")
         print(f"{'─'*55}\n")
