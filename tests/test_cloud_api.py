@@ -1,5 +1,8 @@
 import pytest
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import httpx
 
 from voiceflow.application.auth import Principal
@@ -88,3 +91,32 @@ def test_backend_api_requires_auth_and_scopes_jobs_to_principal(tmp_path):
     assert created.status_code == 200
     assert wrong_owner.status_code == 404
     assert duplicate_wrong_owner.status_code == 404
+
+
+def test_concurrent_job_submissions_with_same_request_id_do_not_cross_owners(tmp_path):
+    repository = SQLiteJobRepository(tmp_path / "jobs.db")
+    app = create_cloud_app(repository, FakeAuthenticator())
+    start = Barrier(2)
+
+    def submit(owner):
+        async def exercise():
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                start.wait(timeout=5)
+                return await client.post(
+                    "/jobs",
+                    json={"request_id": "request-concurrent"},
+                    headers={"Authorization": f"Bearer {owner}"},
+                )
+
+        return asyncio.run(exercise())
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        responses = list(executor.map(submit, ("owner-1", "owner-2")))
+
+    assert sorted(response.status_code for response in responses) == [200, 404]
+    accepted = next(response for response in responses if response.status_code == 200)
+    hidden = next(response for response in responses if response.status_code == 404)
+    assert accepted.json()["user_id"] in {"owner-1", "owner-2"}
+    assert hidden.json() == {"error": "Job not found."}
+    assert repository.get("request-concurrent").user_id == accepted.json()["user_id"]

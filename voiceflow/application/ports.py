@@ -57,6 +57,7 @@ class HistoryRepository(Protocol):
         clean: str,
         level: str = "light",
         app: str | None = None,
+        request_id: str | None = None,
     ) -> int: ...
 
 
@@ -64,6 +65,10 @@ class JobRepository(Protocol):
     """Persist job lifecycle state outside the worker process."""
 
     def create(self, request_id: str, user_id: str | None = None) -> DictationJob: ...
+
+    def create_for_owner(self, request_id: str, user_id: str) -> DictationJob | None:
+        """Create or load a job only when it belongs to ``user_id``."""
+        ...
 
     def get(self, request_id: str) -> DictationJob | None: ...
 

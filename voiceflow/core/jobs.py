@@ -1,7 +1,8 @@
 """SQLite adapter for the durable local dictation job repository."""
 
 import sqlite3
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ..application.jobs import DictationJob, JobClaim, JobStatus
@@ -11,8 +12,18 @@ from ..config.paths import HISTORY_DB_PATH
 class SQLiteJobRepository:
     """Persist job state in SQLite behind a cloud-ready interface."""
 
-    def __init__(self, db_path: Path = HISTORY_DB_PATH) -> None:
+    def __init__(
+        self,
+        db_path: Path = HISTORY_DB_PATH,
+        *,
+        processing_lease_seconds: float = 300,
+        clock: Callable[[], datetime] | None = None,
+    ) -> None:
+        if processing_lease_seconds <= 0:
+            raise ValueError("processing_lease_seconds must be positive")
         self.db_path = Path(db_path)
+        self.processing_lease = timedelta(seconds=processing_lease_seconds)
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
         self.init_db()
 
     def _conn(self) -> sqlite3.Connection:
@@ -47,8 +58,9 @@ class SQLiteJobRepository:
             connection.commit()
 
     def create(self, request_id: str, user_id: str | None = None) -> DictationJob:
-        now = _now()
+        now = self._now()
         with self._conn() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             connection.execute(
                 """
                 INSERT OR IGNORE INTO dictation_jobs
@@ -57,11 +69,37 @@ class SQLiteJobRepository:
                 """,
                 (request_id, JobStatus.ACCEPTED.value, user_id, now, now),
             )
+            row = connection.execute(
+                "SELECT * FROM dictation_jobs WHERE request_id = ?",
+                (request_id,),
+            ).fetchone()
             connection.commit()
-        job = self.get(request_id)
-        if job is None:
+        if row is None:
             raise RuntimeError(f"Could not create dictation job: {request_id}")
-        return job
+        return _row_to_job(row)
+
+    def create_for_owner(self, request_id: str, user_id: str) -> DictationJob | None:
+        """Atomically create a job or load it when ``user_id`` owns it."""
+        now = self._now()
+        with self._conn() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO dictation_jobs
+                    (request_id, status, user_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (request_id, JobStatus.ACCEPTED.value, user_id, now, now),
+            )
+            row = connection.execute(
+                """
+                SELECT * FROM dictation_jobs
+                 WHERE request_id = ? AND user_id = ?
+                """,
+                (request_id, user_id),
+            ).fetchone()
+            connection.commit()
+        return _row_to_job(row) if row else None
 
     def get(self, request_id: str) -> DictationJob | None:
         with self._conn() as connection:
@@ -83,7 +121,7 @@ class SQLiteJobRepository:
         return _row_to_job(row) if row else None
 
     def claim_processing(self, request_id: str, claim_token: str) -> JobClaim:
-        """Atomically claim an accepted or unclaimed processing job."""
+        """Atomically claim a job or reclaim an expired processing lease."""
         with self._conn() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
@@ -94,13 +132,23 @@ class SQLiteJobRepository:
                 raise KeyError(f"Unknown dictation job: {request_id}")
 
             status = JobStatus(row["status"])
-            token_owned_by_other = (
+            now = self._clock()
+            if now.tzinfo is None:
+                now = now.replace(tzinfo=timezone.utc)
+            updated_at = _parse_timestamp(row["updated_at"])
+            if updated_at is not None and updated_at.tzinfo is None:
+                updated_at = updated_at.replace(tzinfo=timezone.utc)
+            lease_expired = (
                 status is JobStatus.PROCESSING
-                and row["claim_token"]
-                and row["claim_token"] != claim_token
+                and updated_at is not None
+                and updated_at <= now - self.processing_lease
             )
-            eligible = status in {JobStatus.ACCEPTED, JobStatus.PROCESSING}
-            acquired = eligible and not token_owned_by_other
+            owns_lease = row["claim_token"] == claim_token
+            unclaimed = not row["claim_token"]
+            acquired = status is JobStatus.ACCEPTED or (
+                status is JobStatus.PROCESSING
+                and (owns_lease or unclaimed or lease_expired)
+            )
             if acquired:
                 connection.execute(
                     """
@@ -108,14 +156,22 @@ class SQLiteJobRepository:
                        SET status = ?, claim_token = ?, updated_at = ?
                      WHERE request_id = ?
                     """,
-                    (JobStatus.PROCESSING.value, claim_token, _now(), request_id),
+                    (
+                        JobStatus.PROCESSING.value,
+                        claim_token,
+                        now.isoformat(timespec="microseconds"),
+                        request_id,
+                    ),
                 )
+                row = connection.execute(
+                    "SELECT * FROM dictation_jobs WHERE request_id = ?",
+                    (request_id,),
+                ).fetchone()
             connection.commit()
 
-        job = self.get(request_id)
-        if job is None:
+        if row is None:
             raise KeyError(f"Unknown dictation job: {request_id}")
-        return JobClaim(job=job, acquired=acquired)
+        return JobClaim(job=_row_to_job(row), acquired=acquired)
 
     def update(
         self,
@@ -128,7 +184,7 @@ class SQLiteJobRepository:
         error: str | None = None,
         claim_token: str | None = None,
     ) -> DictationJob:
-        now = _now()
+        now = self._now()
         with self._conn() as connection:
             cursor = connection.execute(
                 """
@@ -162,9 +218,11 @@ class SQLiteJobRepository:
             raise KeyError(f"Unknown dictation job: {request_id}")
         return job
 
-
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    def _now(self) -> str:
+        now = self._clock()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        return now.isoformat(timespec="microseconds")
 
 
 def _parse_timestamp(value: str | None) -> datetime | None:

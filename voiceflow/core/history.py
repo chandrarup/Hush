@@ -33,24 +33,52 @@ def init_db():
                 clean    TEXT    NOT NULL,
                 level    TEXT    NOT NULL DEFAULT 'light',
                 app      TEXT,
-                words    INTEGER NOT NULL DEFAULT 0
+                words    INTEGER NOT NULL DEFAULT 0,
+                request_id TEXT
             )
         """)
+        columns = {row[1] for row in c.execute("PRAGMA table_info(entries)")}
+        if "request_id" not in columns:
+            c.execute("ALTER TABLE entries ADD COLUMN request_id TEXT")
+        c.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_entries_request_id
+                ON entries(request_id) WHERE request_id IS NOT NULL
+            """
+        )
         c.commit()
     print("[history] DB ready at", DB_PATH)
 
 
-def save_entry(raw: str, clean: str, level: str = "light", app: str | None = None) -> int:
-    """Save a transcription entry. Returns the new row id."""
+def save_entry(
+    raw: str,
+    clean: str,
+    level: str = "light",
+    app: str | None = None,
+    request_id: str | None = None,
+) -> int:
+    """Save a transcription once per request ID and return its row ID."""
     words = len(clean.split())
     ts    = datetime.now().isoformat(timespec="seconds")
     with _conn() as c:
         cur = c.execute(
-            "INSERT INTO entries (ts, raw, clean, level, app, words) VALUES (?,?,?,?,?,?)",
-            (ts, raw, clean, level, app, words),
+            """
+            INSERT OR IGNORE INTO entries
+                (ts, raw, clean, level, app, words, request_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (ts, raw, clean, level, app, words, request_id),
         )
         c.commit()
-        return cur.lastrowid
+        if cur.rowcount == 1:
+            return cur.lastrowid
+        row = c.execute(
+            "SELECT id FROM entries WHERE request_id = ?",
+            (request_id,),
+        ).fetchone()
+        if row is None:
+            raise RuntimeError(f"Could not save history for request: {request_id}")
+        return row["id"]
 
 
 def get_entries(limit: int = 200, offset: int = 0) -> list[dict]:

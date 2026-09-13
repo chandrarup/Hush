@@ -1,6 +1,11 @@
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
 from voiceflow.application.models import DictationStatus
 from voiceflow.application.jobs import DictationJob, JobClaim, JobStatus
 from voiceflow.application.workflow import DictationWorkflow
+from voiceflow.core.jobs import SQLiteJobRepository
 
 
 class FakePreprocessor:
@@ -36,10 +41,15 @@ class FakeCleaner:
 class FakeHistory:
     def __init__(self):
         self.entries = []
+        self.request_ids = {}
 
-    def save_entry(self, raw, clean, level="light", app=None):
+    def save_entry(self, raw, clean, level="light", app=None, request_id=None):
+        if request_id in self.request_ids:
+            return self.request_ids[request_id]
         self.entries.append((raw, clean, level, app))
-        return len(self.entries)
+        entry_id = len(self.entries)
+        self.request_ids[request_id] = entry_id
+        return entry_id
 
 
 class FakeSnippets:
@@ -87,6 +97,25 @@ class FakeJobs:
 
     def get_for_owner(self, request_id, user_id):
         return self.existing
+
+
+class LeaseLostJobs(FakeJobs):
+    def __init__(self):
+        super().__init__()
+        self.claim_attempts = 0
+
+    def claim_processing(self, request_id, claim_token):
+        self.claim_attempts += 1
+        if self.claim_attempts == 1:
+            return super().claim_processing(request_id, claim_token)
+        return JobClaim(
+            job=DictationJob(
+                request_id=request_id,
+                status=JobStatus.PROCESSING,
+                claim_token="replacement-worker",
+            ),
+            acquired=False,
+        )
 
 
 def make_workflow(
@@ -169,7 +198,53 @@ def test_workflow_updates_durable_job_lifecycle():
     assert result.status is DictationStatus.COMPLETED
     assert jobs.statuses[0] == ("request-2", JobStatus.ACCEPTED)
     assert jobs.statuses[1][1] is JobStatus.PROCESSING
-    assert jobs.statuses[2][1] is JobStatus.COMPLETED
+    assert jobs.statuses[2][1] is JobStatus.PROCESSING
+    assert jobs.statuses[3][1] is JobStatus.COMPLETED
+
+
+def test_workflow_retries_an_abandoned_processing_claim_without_duplicate_history(tmp_path):
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def clock():
+        return now
+
+    jobs = SQLiteJobRepository(
+        tmp_path / "jobs.db",
+        processing_lease_seconds=30,
+        clock=clock,
+    )
+    jobs.create("request-abandoned")
+    abandoned = jobs.claim_processing("request-abandoned", "stopped-worker")
+    assert abandoned.acquired is True
+
+    now += timedelta(seconds=31)
+    workflow, _, history, events = make_workflow(jobs=jobs)
+    retried = workflow.process(object(), request_id="request-abandoned")
+
+    assert retried.status is DictationStatus.COMPLETED
+    assert len(history.entries) == 1
+    assert len(events.events) == 1
+    assert jobs.get("request-abandoned").status is JobStatus.COMPLETED
+    with pytest.raises(KeyError):
+        jobs.update(
+            "request-abandoned",
+            JobStatus.COMPLETED,
+            entry_id=999,
+            claim_token="stopped-worker",
+        )
+    assert jobs.get("request-abandoned").entry_id == retried.entry_id
+
+
+def test_stale_worker_losing_lease_cannot_persist_or_publish_result():
+    jobs = LeaseLostJobs()
+    workflow, _, history, events = make_workflow(jobs=jobs)
+
+    result = workflow.process(object(), request_id="request-reclaimed")
+
+    assert result.status is DictationStatus.FAILED
+    assert result.error == "dictation job processing lease was lost"
+    assert history.entries == []
+    assert events.events == []
 
 
 def test_retrying_completed_job_returns_saved_result_without_duplicate_history():

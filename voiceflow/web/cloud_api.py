@@ -44,10 +44,9 @@ def create_cloud_app(jobs: JobRepository, authenticator: Authenticator):
         request_id = uuid.uuid4().hex if raw_request_id is None else str(raw_request_id).strip()
         if not request_id:
             return JSONResponse({"error": "request_id cannot be empty."}, status_code=400)
-        existing = jobs.get(request_id)
-        if existing is not None and existing.user_id != principal.subject:
+        job = jobs.create_for_owner(request_id, principal.subject)
+        if job is None:
             return JSONResponse({"error": "Job not found."}, status_code=404)
-        job = jobs.create(request_id, user_id=principal.subject)
         return _job_payload(job)
 
     @app.get("/jobs/{request_id}")

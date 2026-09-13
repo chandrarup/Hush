@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from voiceflow.application.jobs import JobStatus
 from voiceflow.core.jobs import SQLiteJobRepository
 
@@ -28,7 +30,16 @@ def test_sqlite_job_repository_is_idempotent_and_persists_lifecycle(tmp_path):
 
 
 def test_sqlite_job_claim_is_atomic_and_owner_scoped(tmp_path):
-    repository = SQLiteJobRepository(tmp_path / "jobs.db")
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def clock():
+        return now
+
+    repository = SQLiteJobRepository(
+        tmp_path / "jobs.db",
+        processing_lease_seconds=30,
+        clock=clock,
+    )
     repository.create("request-claim", user_id="user-1")
 
     first = repository.claim_processing("request-claim", "worker-1")
@@ -39,3 +50,9 @@ def test_sqlite_job_claim_is_atomic_and_owner_scoped(tmp_path):
     assert second.acquired is False
     assert repository.get_for_owner("request-claim", "user-1") is not None
     assert repository.get_for_owner("request-claim", "user-2") is None
+
+    now += timedelta(seconds=31)
+    reclaimed = repository.claim_processing("request-claim", "worker-2")
+
+    assert reclaimed.acquired is True
+    assert reclaimed.job.claim_token == "worker-2"

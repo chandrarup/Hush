@@ -102,11 +102,19 @@ class DictationWorkflow:
                     app_context=app_context,
                 ).strip()
 
+            # Processing can outlive the original lease. Renew immediately
+            # before durable side effects so a reclaimed stale worker cannot
+            # create history, publish completion, or trigger text injection.
+            claim = self._jobs.claim_processing(request_id, claim_token) if self._jobs else None
+            if claim is not None and not claim.acquired:
+                return self._lost_claim_result(request_id, cleanup_level, app_context)
+
             entry_id = self._history.save_entry(
                 raw=raw_text,
                 clean=clean_text,
                 level=cleanup_level,
                 app=app_context,
+                request_id=request_id,
             )
             result = self._result(
                 request_id,
@@ -117,14 +125,15 @@ class DictationWorkflow:
                 app_context=app_context,
                 cleanup_level=cleanup_level,
             )
-            self._update_job(
+            if not self._update_job(
                 request_id,
                 JobStatus.COMPLETED,
                 raw_text=raw_text,
                 clean_text=clean_text,
                 entry_id=entry_id,
                 claim_token=claim_token,
-            )
+            ):
+                return self._lost_claim_result(request_id, cleanup_level, app_context)
             self._publish_result_safely(result)
             return result
         except Exception as exc:
@@ -144,9 +153,27 @@ class DictationWorkflow:
             self._publish_result_safely(result)
             return result
 
-    def _update_job(self, request_id: str, status: JobStatus, **kwargs) -> None:
+    def _update_job(self, request_id: str, status: JobStatus, **kwargs) -> bool:
         if self._jobs is not None:
-            self._jobs.update(request_id, status, **kwargs)
+            try:
+                self._jobs.update(request_id, status, **kwargs)
+            except KeyError:
+                return False
+        return True
+
+    def _lost_claim_result(
+        self,
+        request_id: str,
+        cleanup_level: str,
+        app_context: str | None,
+    ) -> DictationResult:
+        return self._result(
+            request_id,
+            DictationStatus.FAILED,
+            cleanup_level=cleanup_level,
+            app_context=app_context,
+            error="dictation job processing lease was lost",
+        )
 
     def _result(self, request_id: str, status: DictationStatus, **kwargs) -> DictationResult:
         return DictationResult(

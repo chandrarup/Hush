@@ -37,8 +37,21 @@ class LocalHistoryRepository:
     def __init__(self, history_module) -> None:
         self._history = history_module
 
-    def save_entry(self, raw: str, clean: str, level: str = "light", app: str | None = None) -> int:
-        return self._history.save_entry(raw=raw, clean=clean, level=level, app=app)
+    def save_entry(
+        self,
+        raw: str,
+        clean: str,
+        level: str = "light",
+        app: str | None = None,
+        request_id: str | None = None,
+    ) -> int:
+        return self._history.save_entry(
+            raw=raw,
+            clean=clean,
+            level=level,
+            app=app,
+            request_id=request_id,
+        )
 
 
 class CallableCleaner:
