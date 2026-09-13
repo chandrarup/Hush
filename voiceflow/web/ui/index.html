@@ -206,6 +206,14 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
   background: white; border: 1px solid var(--border);
   border-radius: 7px; padding: 5px 12px; font-size: 12px;
 }
+.hotkey-actions { display: flex; align-items: center; gap: 8px; }
+.hotkey-editor { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.hotkey-editor select {
+  min-width: 150px; border: 1px solid var(--border); border-radius: 7px;
+  padding: 6px 10px; font-size: 13px; font-family: var(--font);
+  background: white; color: var(--text-1); outline: none;
+}
+.hotkey-editor select:focus { border-color: var(--accent); }
 
 /* Snippet controls use the same language as the existing settings form. */
 .snippet-intro { font-size: 13px; color: var(--text-3); line-height: 1.5; margin: -4px 0 12px; }
@@ -264,6 +272,7 @@ html[data-theme="dark"] .settings-control select,
 html[data-theme="dark"] .settings-control input,
 html[data-theme="dark"] .settings-control textarea,
 html[data-theme="dark"] .hotkey-display,
+html[data-theme="dark"] .hotkey-editor select,
 html[data-theme="dark"] .level-card { background: #1b1b1b; color: var(--text-1); }
 html[data-theme="dark"] .snippet-item { background: #1b1b1b; }
 html[data-theme="dark"] .btn:hover,
@@ -415,9 +424,29 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
             <div class="settings-row-label">Push-to-talk key</div>
             <div class="settings-row-sub">Currently configured in ~/.voiceflow/config.toml</div>
           </div>
-          <div class="settings-control">
-            <span class="hotkey-display" id="hotkey-display">Left Control</span>
+          <div class="settings-control hotkey-actions">
+            <span class="hotkey-display" id="hotkey-display" data-key="ctrl_l">Left Control</span>
+            <button class="btn" id="btn-configure-hotkey" type="button">Configure</button>
           </div>
+        </div>
+        <div class="hotkey-editor" id="hotkey-editor" hidden>
+          <label class="sr-only" for="sel-hotkey">Push-to-talk key</label>
+          <select id="sel-hotkey">
+            <option value="ctrl_l">Left Control</option>
+            <option value="ctrl_r">Right Control</option>
+            <option value="ctrl">Control</option>
+            <option value="cmd_l">Left Command</option>
+            <option value="cmd_r">Right Command</option>
+            <option value="cmd">Command</option>
+            <option value="alt_l">Left Option</option>
+            <option value="alt_r">Right Option</option>
+            <option value="f9">F9</option>
+            <option value="f10">F10</option>
+            <option value="f11">F11</option>
+            <option value="f12">F12</option>
+          </select>
+          <button class="btn primary" id="btn-save-hotkey" type="button">Save hotkey</button>
+          <button class="btn" id="btn-cancel-hotkey" type="button">Cancel</button>
         </div>
       </div>
 
@@ -624,9 +653,7 @@ async function loadHome() {
       ? (stats.total_words/1000).toFixed(1)+'K' : stats.total_words;
     document.getElementById('stat-wpm').textContent = stats.avg_wpm || '-';
     document.getElementById('stat-days').textContent = stats.active_days;
-    const hotkeyLabel = formatHotkey(status.hotkey || 'ctrl_l');
-    document.getElementById('hotkey-badge').textContent = hotkeyLabel;
-    document.getElementById('hotkey-display').textContent = hotkeyLabel;
+    setConfiguredHotkey(status.hotkey || 'ctrl_l');
     renderFeed(entries, document.getElementById('home-feed'), 30);
     // Sync level card
     setActiveLevel(status.cleanup_level || 'light');
@@ -821,6 +848,47 @@ document.querySelectorAll('.level-card').forEach(card => {
 });
 
 // ── Settings ─────────────────────────────────────────────────────── //
+function setConfiguredHotkey(value) {
+  const key = value || 'ctrl_l';
+  const label = formatHotkey(key);
+  const badge = document.getElementById('hotkey-badge');
+  const display = document.getElementById('hotkey-display');
+  if (badge) badge.textContent = label;
+  if (display) {
+    display.textContent = label;
+    display.dataset.key = key;
+  }
+  const select = document.getElementById('sel-hotkey');
+  if (select) select.value = key;
+}
+
+document.getElementById('btn-configure-hotkey').addEventListener('click', () => {
+  const display = document.getElementById('hotkey-display');
+  document.getElementById('sel-hotkey').value = display.dataset.key || 'ctrl_l';
+  document.getElementById('hotkey-editor').hidden = false;
+});
+
+document.getElementById('btn-cancel-hotkey').addEventListener('click', () => {
+  document.getElementById('hotkey-editor').hidden = true;
+});
+
+document.getElementById('btn-save-hotkey').addEventListener('click', async () => {
+  const key = document.getElementById('sel-hotkey').value;
+  try {
+    const response = await fetch(API + '/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({hotkey: key}),
+    });
+    if (!response.ok) throw new Error((await response.json()).error || 'Could not save hotkey.');
+    const payload = await response.json();
+    setConfiguredHotkey(payload.state?.hotkey || key);
+    document.getElementById('hotkey-editor').hidden = true;
+  } catch (error) {
+    alert(error.message || 'Could not save hotkey.');
+  }
+});
+
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
   const payload = {
     asr_engine: document.getElementById('sel-engine').value,

@@ -111,6 +111,17 @@ def _keys_match(key, target) -> bool:
     return False
 
 
+def _update_hotkey(key_name: str) -> bool:
+    """Apply a dashboard hotkey change to the active listener."""
+    global _hotkey_target
+    target = _resolve_hotkey(key_name)
+    if target is None:
+        return False
+    _hotkey_target = target
+    _config.setdefault("hotkey", {})["key"] = key_name
+    return True
+
+
 # ──────────────────────────────────────────────────────────────────── #
 #  Pipeline                                                             #
 # ──────────────────────────────────────────────────────────────────── #
@@ -386,6 +397,7 @@ def main():
     key_name       = hk_cfg.get("key", "ctrl_l")
     _hotkey_target = _resolve_hotkey(key_name)
     print(f"[main] Hotkey target resolved to: {repr(_hotkey_target)}")
+    _api.register_hotkey_updater(_update_hotkey)
 
     # ── Start keyboard listener in background thread ───────────────────
     kb_thread = _start_listener()

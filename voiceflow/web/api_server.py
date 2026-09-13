@@ -17,7 +17,7 @@ import asyncio
 import json
 import pathlib
 import threading
-from typing import Any
+from typing import Any, Callable
 
 try:
     from fastapi import FastAPI, Request
@@ -58,6 +58,13 @@ def update_state(**kwargs):
 _subscribers: list[asyncio.Queue] = []
 _sub_lock = threading.Lock()
 _event_loop: asyncio.AbstractEventLoop | None = None
+_hotkey_updater: Callable[[str], bool] | None = None
+
+
+def register_hotkey_updater(updater: Callable[[str], bool]) -> None:
+    """Register the application callback used to apply a new hotkey immediately."""
+    global _hotkey_updater
+    _hotkey_updater = updater
 
 
 def push_event(event: dict):
@@ -136,12 +143,19 @@ if _FASTAPI_OK:
     async def post_settings(request: Request):
         data = await request.json()
         allowed = {"cleanup_level", "hotkey", "asr_engine", "ollama_model"}
+        if "hotkey" in data:
+            if not isinstance(data["hotkey"], str) or not data["hotkey"].strip():
+                return JSONResponse({"error": "A valid hotkey is required."}, status_code=400)
+            if _hotkey_updater is not None and not _hotkey_updater(data["hotkey"]):
+                return JSONResponse({"error": "Could not apply the selected hotkey."}, status_code=400)
         for k, v in data.items():
             if k in allowed:
                 _state[k] = v
         # Persist cleanup_level to config if changed
         if "cleanup_level" in data:
             _persist_cleanup_level(data["cleanup_level"])
+        if "hotkey" in data:
+            _persist_hotkey(data["hotkey"])
         return {"ok": True, "state": dict(_state)}
 
     @app.get("/snippets")
@@ -279,6 +293,20 @@ def _persist_cleanup_level(level: str):
             toml.dump(cfg, f)
     except Exception as e:
         print(f"[api] Could not persist cleanup_level: {e}")
+
+
+def _persist_hotkey(key: str):
+    """Write the selected hotkey back to ~/.voiceflow/config.toml."""
+    try:
+        import toml
+        config_path = pathlib.Path.home() / ".voiceflow" / "config.toml"
+        cfg = toml.load(str(config_path)) if config_path.exists() else {}
+        cfg.setdefault("hotkey", {})["key"] = key
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w") as f:
+            toml.dump(cfg, f)
+    except Exception as e:
+        print(f"[api] Could not persist hotkey: {e}")
 
 
 # ── Server launcher ────────────────────────────────────────────────── #
