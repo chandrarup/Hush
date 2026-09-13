@@ -42,7 +42,7 @@ def create_cloud_app(jobs: JobRepository, authenticator: Authenticator):
             return JSONResponse({"error": "Authentication required."}, status_code=401)
         try:
             data = await request.json()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return JSONResponse({"error": "Malformed JSON."}, status_code=400)
         if not isinstance(data, dict):
             return JSONResponse({"error": "A JSON object is required."}, status_code=400)

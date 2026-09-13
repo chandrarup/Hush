@@ -142,7 +142,7 @@ if _FASTAPI_OK:
         """Accept a durable job request for local or future cloud workers."""
         try:
             data = await request.json()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return JSONResponse({"error": "Malformed JSON."}, status_code=400)
         if not isinstance(data, dict):
             return JSONResponse({"error": "A JSON object is required."}, status_code=400)
@@ -164,7 +164,7 @@ if _FASTAPI_OK:
     async def post_settings(request: Request):
         try:
             data = await request.json()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return JSONResponse({"error": "Malformed JSON."}, status_code=400)
         if not isinstance(data, dict):
             return JSONResponse({"error": "A JSON object is required."}, status_code=400)
@@ -191,7 +191,7 @@ if _FASTAPI_OK:
     async def post_snippet(request: Request):
         try:
             data = await request.json()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             return JSONResponse({"error": "Malformed JSON."}, status_code=400)
         if not isinstance(data, dict):
             return JSONResponse({"error": "A snippet object is required."}, status_code=400)

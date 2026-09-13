@@ -71,6 +71,14 @@ def test_backend_api_requires_auth_and_scopes_jobs_to_principal(tmp_path):
                     "content-type": "application/json",
                 },
             )
+            malformed_encoding = await client.post(
+                "/jobs",
+                content=b"\xff",
+                headers={
+                    "Authorization": "Bearer owner-1",
+                    "content-type": "application/json",
+                },
+            )
             empty = await client.post(
                 "/jobs",
                 json={"request_id": ""},
@@ -90,12 +98,29 @@ def test_backend_api_requires_auth_and_scopes_jobs_to_principal(tmp_path):
                 json={"request_id": "request-owner", "user_id": "owner-1"},
                 headers={"Authorization": "Bearer owner-2"},
             )
-        return unauthenticated, malformed, empty, created, wrong_owner, duplicate_wrong_owner
+        return (
+            unauthenticated,
+            malformed,
+            malformed_encoding,
+            empty,
+            created,
+            wrong_owner,
+            duplicate_wrong_owner,
+        )
 
-    unauthenticated, malformed, empty, created, wrong_owner, duplicate_wrong_owner = asyncio.run(exercise())
+    (
+        unauthenticated,
+        malformed,
+        malformed_encoding,
+        empty,
+        created,
+        wrong_owner,
+        duplicate_wrong_owner,
+    ) = asyncio.run(exercise())
 
     assert unauthenticated.status_code == 401
     assert malformed.status_code == 400
+    assert malformed_encoding.status_code == 400
     assert empty.status_code == 400
     assert created.status_code == 200
     assert wrong_owner.status_code == 404

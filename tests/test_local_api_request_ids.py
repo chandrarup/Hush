@@ -21,11 +21,17 @@ def test_local_api_preserves_explicit_empty_request_id_for_validation(tmp_path, 
                 content=b"{",
                 headers={"content-type": "application/json"},
             )
-        return empty, generated, malformed
+            malformed_encoding = await client.post(
+                "/snippets",
+                content=b"\xff",
+                headers={"content-type": "application/json"},
+            )
+        return empty, generated, malformed, malformed_encoding
 
-    empty, generated, malformed = asyncio.run(exercise())
+    empty, generated, malformed, malformed_encoding = asyncio.run(exercise())
 
     assert empty.status_code == 400
     assert generated.status_code == 200
     assert generated.json()["request_id"]
     assert malformed.status_code == 400
+    assert malformed_encoding.status_code == 400
