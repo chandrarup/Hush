@@ -5,7 +5,10 @@ then receive one stable result. Desktop startup, FastAPI, and future cloud
 workers can all use the same interface.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
+from threading import Event, Thread
 from uuid import uuid4
 
 from .jobs import JobStatus
@@ -35,7 +38,10 @@ class DictationWorkflow:
         snippets: SnippetExpander,
         events: EventPublisher | None = None,
         jobs: JobRepository | None = None,
+        lease_renewal_interval_seconds: float = 30.0,
     ) -> None:
+        if lease_renewal_interval_seconds <= 0:
+            raise ValueError("lease_renewal_interval_seconds must be positive")
         self._preprocessor = preprocessor
         self._transcriber = transcriber
         self._cleaner = cleaner
@@ -43,6 +49,7 @@ class DictationWorkflow:
         self._snippets = snippets
         self._events = events
         self._jobs = jobs
+        self._lease_renewal_interval_seconds = lease_renewal_interval_seconds
 
     def process(
         self,
@@ -81,77 +88,81 @@ class DictationWorkflow:
                     error="dictation job is already being processed",
                 )
 
-        try:
-            prepared = self._preprocessor.prepare(audio)
-            if prepared is None:
-                self._update_job(request_id, JobStatus.DISCARDED, claim_token=claim_token)
-                return self._result(request_id, DictationStatus.DISCARDED)
+        lease_lost = Event()
+        with self._lease_heartbeat(request_id, claim_token, lease_lost):
+            try:
+                prepared = self._preprocessor.prepare(audio)
+                if lease_lost.is_set():
+                    return self._lost_claim_result(request_id, cleanup_level, app_context)
+                if prepared is None:
+                    self._update_job(request_id, JobStatus.DISCARDED, claim_token=claim_token)
+                    return self._result(request_id, DictationStatus.DISCARDED)
 
-            raw_text = self._transcriber.transcribe(prepared, vocab=vocab).strip()
-            if not raw_text:
-                self._update_job(request_id, JobStatus.DISCARDED, claim_token=claim_token)
-                return self._result(request_id, DictationStatus.DISCARDED)
+                raw_text = self._transcriber.transcribe(prepared, vocab=vocab).strip()
+                if lease_lost.is_set():
+                    return self._lost_claim_result(request_id, cleanup_level, app_context)
+                if not raw_text:
+                    self._update_job(request_id, JobStatus.DISCARDED, claim_token=claim_token)
+                    return self._result(request_id, DictationStatus.DISCARDED)
 
-            expanded_text, was_exact_snippet = self._snippets.expand(raw_text)
-            if was_exact_snippet:
-                clean_text = expanded_text
-            else:
-                clean_text = self._cleaner.clean(
-                    expanded_text,
+                expanded_text, was_exact_snippet = self._snippets.expand(raw_text)
+                if was_exact_snippet:
+                    clean_text = expanded_text
+                else:
+                    clean_text = self._cleaner.clean(
+                        expanded_text,
+                        level=cleanup_level,
+                        app_context=app_context,
+                    ).strip()
+                if lease_lost.is_set() or not self._renew_claim(request_id, claim_token):
+                    return self._lost_claim_result(request_id, cleanup_level, app_context)
+
+                entry_id = self._history.save_entry(
+                    raw=raw_text,
+                    clean=clean_text,
                     level=cleanup_level,
+                    app=app_context,
+                    request_id=request_id,
+                )
+                result = self._result(
+                    request_id,
+                    DictationStatus.COMPLETED,
+                    raw_text=raw_text,
+                    clean_text=clean_text,
+                    entry_id=entry_id,
                     app_context=app_context,
-                ).strip()
-
-            # Processing can outlive the original lease. Renew immediately
-            # before durable side effects so a reclaimed stale worker cannot
-            # create history, publish completion, or trigger text injection.
-            claim = self._jobs.claim_processing(request_id, claim_token) if self._jobs else None
-            if claim is not None and not claim.acquired:
-                return self._lost_claim_result(request_id, cleanup_level, app_context)
-
-            entry_id = self._history.save_entry(
-                raw=raw_text,
-                clean=clean_text,
-                level=cleanup_level,
-                app=app_context,
-                request_id=request_id,
-            )
-            result = self._result(
-                request_id,
-                DictationStatus.COMPLETED,
-                raw_text=raw_text,
-                clean_text=clean_text,
-                entry_id=entry_id,
-                app_context=app_context,
-                cleanup_level=cleanup_level,
-            )
-            if not self._update_job(
-                request_id,
-                JobStatus.COMPLETED,
-                raw_text=raw_text,
-                clean_text=clean_text,
-                entry_id=entry_id,
-                claim_token=claim_token,
-            ):
-                return self._lost_claim_result(request_id, cleanup_level, app_context)
-            self._publish_result_safely(result)
-            return result
-        except Exception as exc:
-            result = self._result(
-                request_id,
-                DictationStatus.FAILED,
-                app_context=app_context,
-                cleanup_level=cleanup_level,
-                error=str(exc),
-            )
-            self._update_job(
-                request_id,
-                JobStatus.FAILED,
-                error=str(exc),
-                claim_token=claim_token,
-            )
-            self._publish_result_safely(result)
-            return result
+                    cleanup_level=cleanup_level,
+                )
+                if not self._update_job(
+                    request_id,
+                    JobStatus.COMPLETED,
+                    raw_text=raw_text,
+                    clean_text=clean_text,
+                    entry_id=entry_id,
+                    claim_token=claim_token,
+                ):
+                    return self._lost_claim_result(request_id, cleanup_level, app_context)
+                self._publish_result_safely(result)
+                return result
+            except Exception as exc:
+                if lease_lost.is_set():
+                    return self._lost_claim_result(request_id, cleanup_level, app_context)
+                result = self._result(
+                    request_id,
+                    DictationStatus.FAILED,
+                    app_context=app_context,
+                    cleanup_level=cleanup_level,
+                    error=str(exc),
+                )
+                if not self._update_job(
+                    request_id,
+                    JobStatus.FAILED,
+                    error=str(exc),
+                    claim_token=claim_token,
+                ):
+                    return self._lost_claim_result(request_id, cleanup_level, app_context)
+                self._publish_result_safely(result)
+                return result
 
     def _update_job(self, request_id: str, status: JobStatus, **kwargs) -> bool:
         if self._jobs is not None:
@@ -160,6 +171,45 @@ class DictationWorkflow:
             except KeyError:
                 return False
         return True
+
+    def _renew_claim(self, request_id: str, claim_token: str | None) -> bool:
+        if self._jobs is None or claim_token is None:
+            return True
+        try:
+            return self._jobs.renew_processing(request_id, claim_token)
+        except KeyError:
+            return False
+
+    @contextmanager
+    def _lease_heartbeat(
+        self,
+        request_id: str,
+        claim_token: str | None,
+        lease_lost: Event,
+    ) -> Iterator[None]:
+        if self._jobs is None or claim_token is None:
+            yield
+            return
+
+        stopped = Event()
+
+        def renew_until_stopped() -> None:
+            while not stopped.wait(self._lease_renewal_interval_seconds):
+                if not self._renew_claim(request_id, claim_token):
+                    lease_lost.set()
+                    return
+
+        heartbeat = Thread(
+            target=renew_until_stopped,
+            name=f"voiceflow-lease-{request_id}",
+            daemon=True,
+        )
+        heartbeat.start()
+        try:
+            yield
+        finally:
+            stopped.set()
+            heartbeat.join(timeout=self._lease_renewal_interval_seconds)
 
     def _lost_claim_result(
         self,

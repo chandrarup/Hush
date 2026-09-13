@@ -103,10 +103,11 @@ The local implementation stores job status in SQLite. A cloud deployment can
 use the same application port with a PostgreSQL repository and a Pub/Sub or
 Cloud Tasks worker. The API exposes `POST /jobs` and `GET /jobs/{request_id}`
 so clients can reconnect and retrieve a result after a process or network
-restart. Processing claims use a persisted token so concurrent workers cannot
-both create history for the same request. The backend-only API requires an
-injected authenticator and scopes job creation and lookup to the verified
-principal.
+restart. Processing claims use a persisted token and renewable lease so
+concurrent workers cannot both process the same request, even when
+transcription or cleanup runs longer than one lease interval. The backend-only
+API requires an injected authenticator and scopes job creation and lookup to
+the verified principal.
 
 ## Deployment configuration
 

@@ -76,6 +76,8 @@ class JobRepository(Protocol):
 
     def claim_processing(self, request_id: str, claim_token: str) -> JobClaim: ...
 
+    def renew_processing(self, request_id: str, claim_token: str) -> bool: ...
+
     def update(
         self,
         request_id: str,

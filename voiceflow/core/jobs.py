@@ -173,6 +173,28 @@ class SQLiteJobRepository:
             raise KeyError(f"Unknown dictation job: {request_id}")
         return JobClaim(job=_row_to_job(row), acquired=acquired)
 
+    def renew_processing(self, request_id: str, claim_token: str) -> bool:
+        """Extend a processing lease only for its current owner."""
+        now = self._now()
+        with self._conn() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE dictation_jobs
+                   SET updated_at = ?
+                 WHERE request_id = ?
+                   AND status = ?
+                   AND claim_token = ?
+                """,
+                (
+                    now,
+                    request_id,
+                    JobStatus.PROCESSING.value,
+                    claim_token,
+                ),
+            )
+            connection.commit()
+        return cursor.rowcount == 1
+
     def update(
         self,
         request_id: str,

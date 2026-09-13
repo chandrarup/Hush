@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from threading import Event, Thread
+from time import monotonic, sleep
 
 import pytest
 
@@ -30,10 +32,13 @@ class FakeTranscriber:
 
 
 class FakeCleaner:
-    def __init__(self):
+    def __init__(self, error=None):
         self.calls = []
+        self.error = error
 
     def clean(self, transcript, *, level, app_context=None):
+        if self.error:
+            raise self.error
         self.calls.append((transcript, level, app_context))
         return f"cleaned: {transcript}"
 
@@ -92,6 +97,10 @@ class FakeJobs:
         self.statuses.append((request_id, JobStatus.PROCESSING, {"claim_token": claim_token}))
         return JobClaim(job=job, acquired=True)
 
+    def renew_processing(self, request_id, claim_token):
+        self.statuses.append((request_id, JobStatus.PROCESSING, {"renewed": claim_token}))
+        return True
+
     def update(self, request_id, status, **kwargs):
         self.statuses.append((request_id, status, kwargs))
 
@@ -102,20 +111,30 @@ class FakeJobs:
 class LeaseLostJobs(FakeJobs):
     def __init__(self):
         super().__init__()
-        self.claim_attempts = 0
+        self.renew_attempts = 0
 
-    def claim_processing(self, request_id, claim_token):
-        self.claim_attempts += 1
-        if self.claim_attempts == 1:
-            return super().claim_processing(request_id, claim_token)
-        return JobClaim(
-            job=DictationJob(
-                request_id=request_id,
-                status=JobStatus.PROCESSING,
-                claim_token="replacement-worker",
-            ),
-            acquired=False,
-        )
+    def renew_processing(self, request_id, claim_token):
+        self.renew_attempts += 1
+        return False
+
+
+class FailedUpdateRejectedJobs(FakeJobs):
+    def update(self, request_id, status, **kwargs):
+        if status is JobStatus.FAILED:
+            raise KeyError(f"Claim lost for {request_id}")
+        super().update(request_id, status, **kwargs)
+
+
+class BlockingTranscriber(FakeTranscriber):
+    def __init__(self, started, release):
+        super().__init__("hello")
+        self.started = started
+        self.release = release
+
+    def transcribe(self, audio, vocab=None):
+        self.started.set()
+        self.release.wait(timeout=2)
+        return super().transcribe(audio, vocab=vocab)
 
 
 def make_workflow(
@@ -127,18 +146,22 @@ def make_workflow(
     preprocessor_error=None,
     event_error=None,
     jobs=None,
+    transcriber=None,
+    cleaner_error=None,
+    lease_renewal_interval_seconds=30.0,
 ):
     history = FakeHistory()
     events = FakeEvents(error=event_error)
-    cleaner = cleaner or FakeCleaner()
+    cleaner = cleaner or FakeCleaner(error=cleaner_error)
     workflow = DictationWorkflow(
         preprocessor=FakePreprocessor(prepared, error=preprocessor_error),
-        transcriber=FakeTranscriber(transcript),
+        transcriber=transcriber or FakeTranscriber(transcript),
         cleaner=cleaner,
         history=history,
         snippets=snippets or FakeSnippets(),
         events=events,
         jobs=jobs,
+        lease_renewal_interval_seconds=lease_renewal_interval_seconds,
     )
     return workflow, cleaner, history, events
 
@@ -245,6 +268,66 @@ def test_stale_worker_losing_lease_cannot_persist_or_publish_result():
     assert result.error == "dictation job processing lease was lost"
     assert history.entries == []
     assert events.events == []
+
+
+def test_lost_claim_during_failure_does_not_publish_failed_result():
+    jobs = FailedUpdateRejectedJobs()
+    workflow, _, history, events = make_workflow(
+        jobs=jobs,
+        cleaner_error=RuntimeError("cleanup failed"),
+    )
+
+    result = workflow.process(object(), request_id="request-failed-claim")
+
+    assert result.status is DictationStatus.FAILED
+    assert result.error == "dictation job processing lease was lost"
+    assert history.entries == []
+    assert events.events == []
+
+
+def test_processing_lease_is_renewed_while_transcriber_is_active(tmp_path):
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def clock():
+        return now
+
+    jobs = SQLiteJobRepository(
+        tmp_path / "jobs.db",
+        processing_lease_seconds=0.05,
+        clock=clock,
+    )
+    jobs.create("request-long-running")
+    started = Event()
+    release = Event()
+    transcriber = BlockingTranscriber(started, release)
+    workflow, _, _, _ = make_workflow(
+        jobs=jobs,
+        transcriber=transcriber,
+        lease_renewal_interval_seconds=0.01,
+    )
+    result_holder = {}
+
+    worker = Thread(
+        target=lambda: result_holder.setdefault(
+            "result",
+            workflow.process(object(), request_id="request-long-running"),
+        )
+    )
+    worker.start()
+    assert started.wait(timeout=1)
+
+    now += timedelta(seconds=1)
+    deadline = monotonic() + 1
+    while jobs.get("request-long-running").updated_at < now and monotonic() < deadline:
+        sleep(0.005)
+
+    competing_claim = jobs.claim_processing("request-long-running", "worker-2")
+    assert competing_claim.acquired is False
+
+    release.set()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+    assert result_holder["result"].status is DictationStatus.COMPLETED
 
 
 def test_retrying_completed_job_returns_saved_result_without_duplicate_history():
