@@ -17,7 +17,7 @@ import asyncio
 import json
 import pathlib
 import threading
-from typing import Any
+from typing import Any, Callable
 
 try:
     from fastapi import FastAPI, Request
@@ -30,13 +30,21 @@ except ImportError:
     _FASTAPI_OK = False
 
 from ..core import history as _history
+from ..config.snippets import (
+    SNIPPETS_PATH,
+    add_snippet,
+    get_snippets_snapshot,
+    remove_snippet,
+    SnippetConflictError,
+    update_snippet,
+)
 from ..platform.factory import get_platform_services
 
 # ── Shared state (updated by main.py) ─────────────────────────────── #
 _state: dict[str, Any] = {
     "status":        "idle",       # idle | recording | processing
     "cleanup_level": "light",      # none | light | medium | high
-    "hotkey":        "cmd_r",
+    "hotkey":        "ctrl_l",
     "asr_engine":    "auto",
     "ollama_model":  "llama3.2:3b",
 }
@@ -50,6 +58,13 @@ def update_state(**kwargs):
 _subscribers: list[asyncio.Queue] = []
 _sub_lock = threading.Lock()
 _event_loop: asyncio.AbstractEventLoop | None = None
+_hotkey_updater: Callable[[str], bool] | None = None
+
+
+def register_hotkey_updater(updater: Callable[[str], bool]) -> None:
+    """Register the application callback used to apply a new hotkey immediately."""
+    global _hotkey_updater
+    _hotkey_updater = updater
 
 
 def push_event(event: dict):
@@ -128,13 +143,85 @@ if _FASTAPI_OK:
     async def post_settings(request: Request):
         data = await request.json()
         allowed = {"cleanup_level", "hotkey", "asr_engine", "ollama_model"}
+        if "hotkey" in data:
+            if not isinstance(data["hotkey"], str) or not data["hotkey"].strip():
+                return JSONResponse({"error": "A valid hotkey is required."}, status_code=400)
+            if _hotkey_updater is not None and not _hotkey_updater(data["hotkey"]):
+                return JSONResponse({"error": "Could not apply the selected hotkey."}, status_code=400)
         for k, v in data.items():
             if k in allowed:
                 _state[k] = v
         # Persist cleanup_level to config if changed
         if "cleanup_level" in data:
             _persist_cleanup_level(data["cleanup_level"])
+        if "hotkey" in data:
+            _persist_hotkey(data["hotkey"])
         return {"ok": True, "state": dict(_state)}
+
+    @app.get("/snippets")
+    async def get_snippets():
+        snippets, version = get_snippets_snapshot()
+        return {
+            "path": str(SNIPPETS_PATH),
+            "snippets": [
+                {**snippet, "index": index, "version": version}
+                for index, snippet in enumerate(snippets)
+            ],
+            "version": version,
+        }
+
+    @app.post("/snippets")
+    async def post_snippet(request: Request):
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A snippet object is required."}, status_code=400)
+        try:
+            snippets = add_snippet(
+                data.get("name", ""),
+                data.get("shortcut", ""),
+                data.get("text", ""),
+            )
+            return {"ok": True, "snippets": snippets}
+        except (AttributeError, TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    @app.put("/snippets/{snippet_index}")
+    async def put_snippet(snippet_index: int, request: Request):
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return JSONResponse({"error": "Malformed JSON."}, status_code=400)
+        if not isinstance(data, dict):
+            return JSONResponse({"error": "A snippet object is required."}, status_code=400)
+        try:
+            snippets = update_snippet(
+                snippet_index,
+                data.get("name", ""),
+                data.get("shortcut", ""),
+                data.get("text", ""),
+            )
+            return {"ok": True, "snippets": snippets}
+        except IndexError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
+        except (AttributeError, TypeError, ValueError) as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+
+    @app.delete("/snippets/{snippet_index}")
+    async def delete_snippet(snippet_index: int, version: str | None = None):
+        if not version:
+            return JSONResponse(
+                {"error": "A snippet list version is required."},
+                status_code=428,
+            )
+        try:
+            return {"ok": True, "snippets": remove_snippet(snippet_index, version)}
+        except SnippetConflictError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=409)
+        except IndexError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=404)
 
     @app.delete("/history")
     async def clear_history():
@@ -206,6 +293,20 @@ def _persist_cleanup_level(level: str):
             toml.dump(cfg, f)
     except Exception as e:
         print(f"[api] Could not persist cleanup_level: {e}")
+
+
+def _persist_hotkey(key: str):
+    """Write the selected hotkey back to ~/.voiceflow/config.toml."""
+    try:
+        import toml
+        config_path = pathlib.Path.home() / ".voiceflow" / "config.toml"
+        cfg = toml.load(str(config_path)) if config_path.exists() else {}
+        cfg.setdefault("hotkey", {})["key"] = key
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w") as f:
+            toml.dump(cfg, f)
+    except Exception as e:
+        print(f"[api] Could not persist hotkey: {e}")
 
 
 # ── Server launcher ────────────────────────────────────────────────── #

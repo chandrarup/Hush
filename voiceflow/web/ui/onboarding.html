@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VoiceFlow — Setup</title>
+<title>VoiceFlow: Setup</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -127,7 +127,7 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
   <div class="card" id="step1">
     <div class="logo-big">🎙️</div>
     <h1>Welcome to VoiceFlow</h1>
-    <p class="subtitle">Hold a key, speak naturally, release — polished text appears wherever your cursor is.<br><br>100% local. No cloud. No subscriptions.</p>
+    <p class="subtitle">Hold a key, speak naturally, and release. Polished text appears wherever your cursor is.<br><br>100% local. No cloud. No subscriptions.</p>
     <button class="btn btn-primary btn-big" onclick="goTo(2)">Get started →</button>
   </div>
 
@@ -155,7 +155,7 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
               <li>System Settings opens to <strong>Privacy &amp; Security → Microphone</strong></li>
               <li>Find <strong>Terminal</strong> (or <strong>Python</strong>) in the list</li>
               <li>Toggle it <strong>ON</strong></li>
-              <li>Come back here — the ❌ will turn ✅ automatically</li>
+              <li>Come back here. The ❌ will turn ✅ automatically.</li>
             </ol>
           </div>
         </div>
@@ -180,8 +180,8 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
               <li>Click <strong>+</strong> if Terminal/Python is not listed, then add it</li>
               <li>Toggle it <strong>ON</strong></li>
             </ol>
-            <div class="restart-warn">⚠️ Input Monitoring needs a <strong>restart</strong> to take effect — VoiceFlow will restart automatically after setup.</div>
-            <button class="perm-btn" style="margin-top:10px;width:100%;background:#fff8e1;border-color:#f6d860;color:#92700a;font-weight:600" onclick="confirmIM()">✓ I've added it — continue</button>
+            <div class="restart-warn">⚠️ Input Monitoring needs a <strong>restart</strong> to take effect. VoiceFlow will restart automatically after setup.</div>
+            <button class="perm-btn" style="margin-top:10px;width:100%;background:#fff8e1;border-color:#f6d860;color:#92700a;font-weight:600" onclick="confirmIM()">✓ I've added it. Continue</button>
           </div>
         </div>
       </div>
@@ -205,7 +205,7 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
               <li>Click the <strong>+</strong> button if Terminal/Python is not listed</li>
               <li>Find and add <strong>Terminal</strong> (or your Python app)</li>
               <li>Toggle it <strong>ON</strong></li>
-              <li>Come back here — the ❌ will turn ✅ automatically</li>
+              <li>Come back here. The ❌ will turn ✅ automatically.</li>
             </ol>
           </div>
         </div>
@@ -225,8 +225,8 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
     <div class="key-grid" id="key-grid">
       <span class="key-chip" data-key="cmd_r">⌘ Right Cmd</span>
       <span class="key-chip" data-key="cmd">⌘ Cmd</span>
-      <span class="key-chip active" data-key="ctrl_r">^ Right Ctrl</span>
-      <span class="key-chip" data-key="ctrl_l">^ Left Ctrl</span>
+      <span class="key-chip" data-key="ctrl_r">^ Right Ctrl</span>
+      <span class="key-chip active" data-key="ctrl_l">^ Left Ctrl</span>
       <span class="key-chip" data-key="alt_r">⌥ Right Alt</span>
       <span class="key-chip" data-key="f9">F9</span>
       <span class="key-chip" data-key="f10">F10</span>
@@ -284,7 +284,7 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
 <script>
 const API = 'http://localhost:57327';
 let currentStep = 1;
-let selectedKey = 'ctrl_r';
+let selectedKey = 'ctrl_l';
 let selectedLevel = 'light';
 let permPollTimer = null;
 
@@ -358,7 +358,7 @@ async function grantPerm(type) {
 }
 
 function confirmIM() {
-  // User says they've added IM manually — trust them and mark as done
+  // User says they've added IM manually, so mark it as done
   imManuallyConfirmed = true;
   document.getElementById('pr-im').classList.add('granted');
   document.getElementById('ps-im').textContent = '✅';
@@ -414,7 +414,7 @@ async function complete() {
 
 // Pre-select the hotkey that's already configured
 fetch(API + '/status').then(r => r.json()).then(s => {
-  const hk = s.hotkey || 'ctrl_r';
+  const hk = s.hotkey || 'ctrl_l';
   selectedKey = hk;
   document.querySelectorAll('.key-chip').forEach(c => {
     c.classList.toggle('active', c.dataset.key === hk);

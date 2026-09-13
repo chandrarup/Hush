@@ -9,7 +9,7 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 
 ## What it does
 
-1. **Hold** Right Ctrl (configurable) — microphone starts recording
+1. **Hold** Left Control (configurable) - microphone starts recording
 2. **Speak** anything naturally (filler words, false starts, all fine)
 3. **Release** the hotkey — pipeline runs automatically:
    - Voice Activity Detection trims silence
@@ -137,7 +137,7 @@ Edit `~/.voiceflow/config.toml`:
 
 ```toml
 [hotkey]
-key = "ctrl_r"        # Right Ctrl — change to "ctrl", "f9", "alt_r", etc.
+key = "ctrl_l"        # Left Control - change to "ctrl", "f9", "alt_r", etc.
 
 [asr]
 engine = "auto"            # auto | parakeet | whisper
@@ -186,8 +186,8 @@ dashboard_port = 57327
 
 | Config value | Key |
 |-------------|-----|
-| `ctrl_r` | Right Control (default) |
-| `ctrl_l` | Left Control |
+| `ctrl_l` | Left Control (default) |
+| `ctrl_r` | Right Control |
 | `alt_r` | Right Alt |
 | `alt_l` | Left Alt |
 | `f9` – `f12` | Function keys |
