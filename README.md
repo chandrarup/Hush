@@ -24,7 +24,31 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 
 ---
 
-## Requirements
+## Install Hush.app on macOS
+
+This is the recommended path for people who want to use Hush, not develop it.
+It does not require Python, `uv`, a virtual environment, Terminal permission,
+or a manually selected executable path.
+
+1. Download `Hush-<version>.dmg` from the GitHub Release.
+2. Open it and drag **Hush** to **Applications**.
+3. Eject the DMG, then open **Hush** from Applications. Hush opens its local
+   dashboard in your browser.
+4. Choose **Allow** for Microphone, then choose **Enable** for Accessibility
+   and turn on **Hush** in the System Settings page that macOS opens.
+
+Input Monitoring is not a required setup step for the free Hush build. macOS
+does not reliably list an unsigned app in that pane, while Accessibility covers
+the event-listening and text-insertion path Hush uses. If the hotkey works, the
+setup is complete. Do not add Terminal or Python to any privacy list for the
+installed app.
+
+See [the macOS app guide](docs/MACOS_APP_RELEASE.md) for the complete install,
+reinstall, and troubleshooting flow.
+
+---
+
+## Source Requirements
 
 | Component | Purpose |
 |-----------|---------|
@@ -37,12 +61,12 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 
 ---
 
-## Quick Start
+## Run From Source
 
-For a complete machine setup checklist, including macOS Input Monitoring,
-Accessibility, Microphone permissions, Python.app selection, and diagnostics,
-see [docs/setup.md](docs/setup.md). The platform architecture is documented in
-[docs/architecture.md](docs/architecture.md).
+These instructions are for a repository checkout. They create a local Python
+environment and have different macOS permission requirements from the installed
+app. See [docs/setup.md](docs/setup.md) for the complete source setup and
+diagnostic guide.
 
 ### 1. Install Ollama
 
@@ -84,9 +108,8 @@ then lets you reopen the exact permission instructions for your machine:
 ./lets-hush
 ```
 
-After setup, use `./lets-hush --permissions` to print the Terminal and
-machine-specific Python.app paths to add in Accessibility and Input Monitoring.
-Use `./lets-hush --start` to launch Hush.
+After setup, use `./lets-hush --permissions` for source-run permission
+instructions on this Mac. Use `./lets-hush --start` to launch Hush.
 
 For Ubuntu/Debian, the equivalent cross-platform helper is:
 
@@ -215,15 +238,14 @@ CAR-T
 
 - Text injection uses **Quartz** by default on macOS.
 - The tray icon appears in the menu bar.
-- Grant **Input Monitoring** for the hotkey:
-  `System Settings → Privacy & Security → Input Monitoring`
-- Grant **Accessibility** for text injection:
-  `System Settings → Privacy & Security → Accessibility`
-- Grant **Microphone** for recording:
-  `System Settings → Privacy & Security → Microphone`
-- If `.venv/bin/python` is greyed out in the macOS picker, run
-  `python -m voiceflow.diagnostics.permission_diagnostic` and add the resolved `Python.app` bundle instead.
-- See [docs/setup.md](docs/setup.md) for the full step-by-step permission flow.
+- The installed **Hush.app** needs Microphone and Accessibility. macOS opens the
+  relevant pages as Hush requests them. Do not add Terminal, Python, or a
+  virtual-environment path for the installed app.
+- Input Monitoring is not a required step for the free installed build. The
+  hotkey can work in other apps after Accessibility is enabled even if Hush is
+  absent from that pane.
+- Source runs are different: see [docs/setup.md](docs/setup.md) for the
+  launcher-specific Terminal and Python.app guidance.
 
 ---
 
@@ -304,10 +326,12 @@ ollama serve
 ```
 VoiceFlow degrades gracefully — if Ollama is unavailable, it injects the raw Whisper transcript.
 
-**pynput permission error on macOS**
+**pynput permission error while running from source on macOS**
 ```
 System Settings → Privacy & Security → Input Monitoring → add Terminal (or Python)
 ```
+This does not apply to an installed `Hush.app`; use the app's Accessibility
+setup instead.
 
 **Whisper downloading model on every run**
 The model is cached in `~/.cache/huggingface/`. If it re-downloads, check that directory is writable.

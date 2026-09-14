@@ -1,4 +1,4 @@
-"""Compatibility entry point for the packaged VoiceFlow application."""
+"""Compatibility entry point for the packaged Hush application."""
 
 from voiceflow.app.main import main
 

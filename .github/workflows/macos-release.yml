@@ -1,0 +1,84 @@
+name: macOS release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-sign-notarize:
+    name: Build, sign, and notarize Hush
+    runs-on: macos-14
+    env:
+      HUSH_VERSION: ${{ github.ref_name }}
+      HUSH_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      HUSH_NOTARY_PROFILE: Hush Notary
+      KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Confirm the Apple Silicon release architecture
+        run: test "$(uname -m)" = "arm64"
+
+      - name: Import the Developer ID certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          certificate_path="$RUNNER_TEMP/hush-certificate.p12"
+          keychain_path="$RUNNER_TEMP/hush-signing.keychain-db"
+          printf '%s' "$CERTIFICATE_BASE64" | base64 -D > "$certificate_path"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security list-keychain -d user -s "$keychain_path" login.keychain-db
+          security default-keychain -d user -s "$keychain_path"
+          security find-identity -v -p codesigning "$keychain_path"
+          rm -f "$certificate_path"
+
+      - name: Configure notarization credentials
+        env:
+          NOTARY_KEY_BASE64: ${{ secrets.APPLE_NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          api_key_path="$RUNNER_TEMP/AuthKey_${NOTARY_KEY_ID}.p8"
+          printf '%s' "$NOTARY_KEY_BASE64" | base64 -D > "$api_key_path"
+          xcrun notarytool store-credentials "$HUSH_NOTARY_PROFILE" \
+            --key "$api_key_path" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID"
+          rm -f "$api_key_path"
+
+      - name: Build, sign, notarize, and validate the DMG
+        run: |
+          set -euo pipefail
+          export HUSH_VERSION="${HUSH_VERSION#v}"
+          bash packaging/build_app.sh
+          bash packaging/sign_and_notarize.sh dist/Hush.app
+
+      - name: Publish the notarized DMG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" "dist/Hush-$version.dmg" \
+            --title "Hush $version" \
+            --generate-notes

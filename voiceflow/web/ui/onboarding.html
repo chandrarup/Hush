@@ -126,7 +126,7 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
   <!-- Step 1: Welcome -->
   <div class="card" id="step1">
     <div class="logo-big">🎙️</div>
-    <h1>Welcome to Hush</h1>
+    <h1>Let's Hush.</h1>
     <p class="subtitle">Hold a key, speak naturally, and release. Polished text appears wherever your cursor is.<br><br>100% local. No cloud. No subscriptions.</p>
     <button class="btn btn-primary btn-big" onclick="goTo(2)">Get started →</button>
   </div>
@@ -134,7 +134,7 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
   <!-- Step 2: Permissions -->
   <div class="card" id="step2" style="display:none">
     <h1>Permissions</h1>
-    <p class="subtitle" style="margin-bottom:20px">Hush needs three permissions. Click <strong>Open Settings</strong> and follow the steps shown.</p>
+    <p class="subtitle" style="margin-bottom:20px">Hush requests microphone and typing access as you enable them.</p>
     <div class="perm-list">
 
       <!-- Microphone -->
@@ -146,42 +146,15 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
             <div class="perm-desc">Required to hear your voice</div>
           </div>
           <span class="perm-status" id="ps-mic">⏳</span>
-          <button class="perm-btn" id="pb-mic" onclick="grantPerm('microphone')">Open Settings</button>
+          <button class="perm-btn" id="pb-mic" onclick="grantPerm('microphone')">Allow</button>
         </div>
         <div class="perm-guide" id="guide-mic">
           <div class="perm-guide-inner">
-            <h5>📋 What to do in System Settings</h5>
+            <h5>📋 What to do</h5>
             <ol>
-              <li>System Settings opens to <strong>Privacy &amp; Security → Microphone</strong></li>
-              <li>Find <strong>Terminal</strong> (or <strong>Python</strong>) in the list</li>
-              <li>Toggle it <strong>ON</strong></li>
-              <li>Come back here. The ❌ will turn ✅ automatically.</li>
+              <li>Choose <strong>Allow</strong> in the macOS microphone dialog.</li>
+              <li>Come back here. This check updates automatically.</li>
             </ol>
-          </div>
-        </div>
-      </div>
-
-      <!-- Input Monitoring -->
-      <div>
-        <div class="perm-row" id="pr-im">
-          <span class="perm-icon">⌨️</span>
-          <div class="perm-info">
-            <div class="perm-name">Input Monitoring</div>
-            <div class="perm-desc">Required to detect your hotkey globally</div>
-          </div>
-          <span class="perm-status" id="ps-im">⏳</span>
-          <button class="perm-btn" id="pb-im" onclick="grantPerm('input_monitoring')">Open Settings</button>
-        </div>
-        <div class="perm-guide" id="guide-im">
-          <div class="perm-guide-inner">
-            <h5>📋 What to do in System Settings</h5>
-            <ol>
-              <li>System Settings opens to <strong>Privacy &amp; Security → Input Monitoring</strong></li>
-              <li>Click <strong>+</strong> if Terminal/Python is not listed, then add it</li>
-              <li>Toggle it <strong>ON</strong></li>
-            </ol>
-            <div class="restart-warn">⚠️ Input Monitoring needs a <strong>restart</strong> to take effect. Hush will restart automatically after setup.</div>
-            <button class="perm-btn" style="margin-top:10px;width:100%;background:#fff8e1;border-color:#f6d860;color:#92700a;font-weight:600" onclick="confirmIM()">✓ I've added it. Continue</button>
           </div>
         </div>
       </div>
@@ -195,16 +168,14 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
             <div class="perm-desc">Required to type into other apps</div>
           </div>
           <span class="perm-status" id="ps-acc">⏳</span>
-          <button class="perm-btn" id="pb-acc" onclick="grantPerm('accessibility')">Open Settings</button>
+          <button class="perm-btn" id="pb-acc" onclick="grantPerm('accessibility')">Enable</button>
         </div>
         <div class="perm-guide" id="guide-acc">
           <div class="perm-guide-inner">
             <h5>📋 What to do in System Settings</h5>
             <ol>
-              <li>System Settings opens to <strong>Privacy &amp; Security → Accessibility</strong></li>
-              <li>Click the <strong>+</strong> button if Terminal/Python is not listed</li>
-              <li>Find and add <strong>Terminal</strong> (or your Python app)</li>
-              <li>Toggle it <strong>ON</strong></li>
+              <li>Choose <strong>Open System Settings</strong> in the macOS alert.</li>
+              <li>Turn on <strong>Hush</strong> in Accessibility.</li>
               <li>Come back here. The ❌ will turn ✅ automatically.</li>
             </ol>
           </div>
@@ -308,18 +279,12 @@ function goTo(n) {
 }
 
 // ── Permissions ───────────────────────────────────────────────────── //
-let imManuallyConfirmed = false;
-
 async function pollPerms() {
   try {
-    const p = await fetch(API + '/permissions').then(r => r.json());
+    const p = await fetch(API + '/permissions?at=' + Date.now(), { cache: 'no-store' }).then(r => r.json());
     updatePermRow('mic', p.microphone);
     updatePermRow('acc', p.accessibility);
-    // Input Monitoring: trust manual confirmation OR auto-detect
-    const imOK = p.input_monitoring || imManuallyConfirmed;
-    updatePermRow('im', imOK);
-    // Only mic + accessibility are hard requirements; IM check can be self-certified
-    const allOK = p.microphone && p.accessibility && imOK;
+    const allOK = p.microphone && p.accessibility;
     document.getElementById('btn-perms-next').disabled = !allOK;
   } catch(e) {}
 }
@@ -349,23 +314,20 @@ function stopPermPoll() {
 
 async function grantPerm(type) {
   // Show inline instructions for this permission
-  const guideMap = { microphone: 'guide-mic', input_monitoring: 'guide-im', accessibility: 'guide-acc' };
+  const guideMap = { microphone: 'guide-mic', accessibility: 'guide-acc' };
   const guideId = guideMap[type];
   if (guideId) {
     document.getElementById(guideId).classList.add('visible');
   }
-  await fetch(API + '/permissions/open/' + type, { method: 'POST' });
-}
-
-function confirmIM() {
-  // User says they've added IM manually, so mark it as done
-  imManuallyConfirmed = true;
-  document.getElementById('pr-im').classList.add('granted');
-  document.getElementById('ps-im').textContent = '✅';
-  document.getElementById('pb-im').disabled = true;
-  document.getElementById('guide-im').classList.remove('visible');
-  // Re-run poll immediately to re-evaluate Continue button
-  pollPerms();
+  const button = document.getElementById('pb-' + (type === 'microphone' ? 'mic' : 'acc'));
+  if (button) {
+    button.disabled = true;
+  }
+  try {
+    const response = await fetch(API + '/permissions/request/' + type, { method: 'POST' });
+    if (!response.ok) throw new Error('Permission request failed');
+  } catch (error) {}
+  setTimeout(pollPerms, 500);
 }
 
 // ── Hotkey ────────────────────────────────────────────────────────── //
@@ -425,6 +387,14 @@ fetch(API + '/status').then(r => r.json()).then(s => {
     c.classList.toggle('active', c.dataset.level === lvl);
   });
 }).catch(() => {});
+
+fetch(API + '/onboarding/start', { method: 'POST' }).catch(() => {});
+window.addEventListener('focus', () => {
+  if (currentStep === 2) pollPerms();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentStep === 2) pollPerms();
+});
 </script>
 </body>
 </html>

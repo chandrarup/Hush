@@ -4,8 +4,10 @@
 
 Hush can eliminate the normal need to find a Python executable and paste a
 machine-specific path into System Settings. The recommended distribution is a
-real, signed **Hush.app**, with an onboarding screen that requests permissions
-for that app. Packaging alone does not approve those permissions.
+real **Hush.app**, with an onboarding screen that requests permissions for that
+app. Signing and notarization are required for a public signed release, but are
+not required for the free local-install flow. Packaging alone does not approve
+permissions.
 
 The achievable experience for automatic dictation into other applications is:
 open Hush, approve microphone access, open the macOS Accessibility pane from
@@ -17,10 +19,11 @@ supported product promise.[^1]
 There is a useful correction to the existing setup guidance. In a May 2026
 answer, Apple Developer Technical Support explains that Accessibility grants
 both event posting and listening; Input Monitoring grants listening alone.
-For Hush's event-tap design, the first release candidate should test
-**microphone plus Accessibility**, without requiring a separate Input
-Monitoring grant. This is strong platform evidence, not yet a verified
-clean-machine result for a packaged Hush build.[^2]
+For Hush's event-tap design, the normal setup flow is **microphone plus
+Accessibility**, without requiring a separate Input Monitoring grant. The free
+build has been tested with a working global hotkey after Accessibility was
+enabled even though Hush was absent from Input Monitoring. The onboarding must
+not claim that an unsigned Hush build will appear there.[^2]
 
 A second design can remove keyboard monitoring independently: use registered
 global shortcuts. A third, reduced-feature design can avoid Accessibility too:

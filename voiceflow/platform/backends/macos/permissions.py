@@ -6,6 +6,11 @@ import subprocess
 
 from ..common.permissions import DesktopPermissions
 from .text_injection import check_accessibility_permission
+from .tcc import (
+    is_microphone_authorized,
+    request_accessibility,
+    request_microphone,
+)
 
 
 class MacOSPermissions(DesktopPermissions):
@@ -13,25 +18,29 @@ class MacOSPermissions(DesktopPermissions):
         super().__init__(
             """
 macOS permissions:
-  Input Monitoring: System Settings -> Privacy & Security -> Input Monitoring
-  Accessibility:    System Settings -> Privacy & Security -> Accessibility
-  Microphone:       System Settings -> Privacy & Security -> Microphone
-Add the launcher that starts VoiceFlow, then restart it.
+  Hush requests permissions during onboarding.
+  Accessibility: System Settings -> Privacy & Security -> Accessibility
 """.strip()
         )
-
     def check_accessibility_permission(self) -> bool:
         return check_accessibility_permission()
 
     def get_all_permissions(self) -> dict:
-        permissions = super().get_all_permissions()
-        permissions["accessibility"] = self.check_accessibility_permission()
-        return permissions
+        return {
+            "microphone": is_microphone_authorized(),
+            "accessibility": self.check_accessibility_permission(),
+        }
+
+    def request_permission(self, permission_type: str) -> bool:
+        if permission_type == "microphone":
+            return request_microphone()
+        if permission_type == "accessibility":
+            return request_accessibility()
+        return False
 
     def open_system_settings(self, permission_type: str) -> bool:
         urls = {
             "microphone": "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
-            "input_monitoring": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
             "accessibility": "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
         }
         url = urls.get(permission_type)

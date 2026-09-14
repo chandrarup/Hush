@@ -26,6 +26,7 @@ from ..core.transcriber import create_transcriber
 from ..core.cleaner import clean_transcript, set_docker_llm_available
 from ..core import history as _history
 from ..platform.factory import get_platform_services
+from ..runtime import configure_runtime_environment
 from ..web import api_server as _api
 
 _platform = get_platform_services()
@@ -56,6 +57,25 @@ _listener               = None   # pynput Listener — kept alive in thread
 
 def _print_permission_guide():
     _platform.permissions.print_permission_guide()
+
+
+def _initial_browser_url(dashboard_port: int, first_launch: bool) -> str:
+    """Choose the page shown when the Hush app is opened."""
+    path = "/onboarding" if first_launch else "/"
+    return f"http://localhost:{dashboard_port}{path}"
+
+
+def _open_browser_after_server_start(dashboard_port: int, first_launch: bool) -> None:
+    """Open setup once, then make every Hush launch visible in the browser."""
+    import webbrowser
+
+    url = _initial_browser_url(dashboard_port, first_launch)
+
+    def _open_browser() -> None:
+        time.sleep(1.5)  # Let uvicorn begin serving before opening the page.
+        webbrowser.open(url, new=2)
+
+    threading.Thread(target=_open_browser, daemon=True).start()
 
 
 # ──────────────────────────────────────────────────────────────────── #
@@ -313,9 +333,9 @@ def _start_listener():
         trusted = getattr(lst, 'IS_TRUSTED', None)
         if trusted is False:
             print("\n" + "!" * 66)
-            print("[main] ⚠  IS_TRUSTED = False — INPUT MONITORING NOT GRANTED")
+            print("[main] ⚠  IS_TRUSTED = False — GLOBAL KEYBOARD ACCESS NOT GRANTED")
             print("[main]    The operating system is blocking global key events.")
-            print("[main]    Check the keyboard/input permission for the launcher, then RESTART.")
+            print("[main]    Enable Accessibility for Hush, then restart if macOS asks.")
             print("!" * 66 + "\n")
         else:
             print(f"[main] ✓ Keyboard listener started. IS_TRUSTED={trusted}")
@@ -362,6 +382,8 @@ def _check_docker_llm(url: str):
 def main():
     global _config, _vocab, _transcriber, _recorder, _hotkey_target
 
+    configure_runtime_environment()
+
     print("=" * 60)
     print("  Hush — Local Push-to-Talk Dictation")
     print("=" * 60)
@@ -369,6 +391,34 @@ def main():
     # ── Config ───────────────────────────────────────────────────────
     _config = load_config()
     _vocab  = load_vocab()
+
+    # ── Local dashboard and onboarding ───────────────────────────────
+    # Start this before model initialization so first-run permissions do not
+    # wait for a potentially large model download.
+    ui_cfg = _config.get("ui", {})
+    dashboard_port = ui_cfg.get("dashboard_port", 57327)
+    asr_cfg = _config.get("asr", {})
+    _api.start_server(port=dashboard_port)
+    _api.update_state(
+        cleanup_level=_config.get("llm", {}).get("cleanup_level", "light"),
+        hotkey=_config.get("hotkey", {}).get("key", "ctrl_l"),
+        asr_engine=asr_cfg.get("engine", "auto"),
+        ollama_model=_config.get("llm", {}).get("ollama_model", "llama3.2:3b"),
+    )
+
+    first_launch = _platform.permissions.is_first_launch()
+    resuming_onboarding = first_launch and _platform.permissions.is_onboarding_in_progress()
+    if first_launch:
+        _platform.permissions.begin_onboarding()
+    if not resuming_onboarding:
+        _open_browser_after_server_start(dashboard_port, first_launch)
+    if first_launch:
+        if resuming_onboarding:
+            print("[main] Resuming the existing onboarding page after a macOS restart.")
+        else:
+            print("[main] First launch — opening onboarding wizard in browser.")
+    else:
+        print("[main] Opening dashboard in browser.")
 
     # ── Permission check ─────────────────────────────────────────────
     _platform.permissions.check_accessibility_permission()
@@ -379,7 +429,6 @@ def main():
     threading.Thread(target=_check_docker_llm, args=(docker_url,), daemon=True).start()
 
     # ── ASR model (load once) ─────────────────────────────────────────
-    asr_cfg = _config.get("asr", {})
     engine  = asr_cfg.get("engine", "auto")
     model   = asr_cfg.get("model",  "")
     print(f"\n[main] Loading ASR  engine={engine}  model={model or 'default'}")
@@ -422,17 +471,6 @@ def main():
     print("[main] Right-click the menu bar icon to Quit.")
     print("[main] (If hotkey does nothing, check keyboard/input permission for the launcher)\n")
 
-    # ── Start API server ──────────────────────────────────────────────
-    ui_cfg = _config.get("ui", {})
-    dashboard_port = ui_cfg.get("dashboard_port", 57327)
-    _api.start_server(port=dashboard_port)
-    _api.update_state(
-        cleanup_level=_config.get("llm", {}).get("cleanup_level", "light"),
-        hotkey=key_name,
-        asr_engine=asr_cfg.get("engine", "auto"),
-        ollama_model=_config.get("llm", {}).get("ollama_model", "llama3.2:3b"),
-    )
-
     # ── Tray owns the main thread where required by the desktop backend ──
     tray = _platform.tray.get_tray()
     tray.setup(on_quit=lambda: os._exit(0), dashboard_port=dashboard_port)
@@ -440,15 +478,6 @@ def main():
     print(f"\n[main] Dashboard : http://localhost:{dashboard_port}")
     print("[main] ✓ Ready — hold hotkey to record, release to transcribe.")
     print("[main] Right-click the menu bar icon to open Dashboard or Quit.\n")
-
-    # ── First-launch onboarding ────────────────────────────────────────
-    if _platform.permissions.is_first_launch():
-        import time, webbrowser
-        def _open_onboarding():
-            time.sleep(1.5)   # let uvicorn start
-            webbrowser.open(f"http://localhost:{dashboard_port}/onboarding")
-        threading.Thread(target=_open_onboarding, daemon=True).start()
-        print("[main] First launch — opening onboarding wizard in browser.")
 
     # This BLOCKS until the user clicks Quit in the tray menu
     tray.run_blocking()

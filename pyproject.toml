@@ -29,6 +29,7 @@ dependencies = [
     "aiofiles>=23.2.1",
 
     # Native macOS text injection; ignored on other operating systems.
+    "pyobjc-framework-AVFoundation>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'",
     "pyobjc-framework-ApplicationServices>=10.0; sys_platform == 'darwin'",
 ]
