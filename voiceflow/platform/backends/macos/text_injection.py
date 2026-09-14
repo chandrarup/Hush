@@ -7,6 +7,7 @@ import threading
 import time
 
 from ..common.clipboard import paste_with_gui, print_injection_failure
+from .tcc import is_accessibility_trusted
 
 
 class MacOSTextInjector:
@@ -93,14 +94,8 @@ class MacOSTextInjector:
 
 
 def check_accessibility_permission() -> bool:
-    try:
-        from ApplicationServices import AXIsProcessTrusted
-
-        trusted = bool(AXIsProcessTrusted())
-        if not trusted:
-            print("[permission] Accessibility is required for text injection.")
-            print("[permission] System Settings -> Privacy & Security -> Accessibility")
-        return trusted
-    except Exception as exc:
-        print(f"[permission] Could not determine Accessibility status: {exc}")
-        return False
+    trusted = is_accessibility_trusted()
+    if not trusted:
+        print("[permission] Accessibility is required for text injection.")
+        print("[permission] System Settings -> Privacy & Security -> Accessibility")
+    return trusted

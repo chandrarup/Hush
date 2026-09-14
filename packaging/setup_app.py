@@ -1,41 +1,43 @@
-"""
-setup_app.py — py2app configuration for VoiceFlow.
-Usage: uv run --group build --extra parakeet python packaging/setup_app.py py2app
-
-Build dependencies are managed by uv. Run the command above from the repository
-root after syncing the build group.
-
-NOTE: py2app with PyTorch produces a ~5-8 GB bundle.
-This is best used for creating a signed .app for the Mac App Store
-or for enterprise distribution. For general public distribution,
-use install.sh + packaging/build_dmg.sh instead.
-"""
+"""py2app configuration for the self-contained Hush macOS application."""
+import os
 from pathlib import Path
+import sys
 
 from setuptools import setup
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-APP    = [str(REPO_ROOT / 'main.py')]
-DATA   = [
-    ('voiceflow/web/ui', [str(REPO_ROOT / 'voiceflow/web/ui/index.html'),
-                          str(REPO_ROOT / 'voiceflow/web/ui/onboarding.html')]),
+# Modulegraph walks optional transformer imports deeply on Python 3.12.
+sys.setrecursionlimit(max(sys.getrecursionlimit(), 10_000))
+
+APP_NAME = "Hush"
+BUNDLE_ID = "com.chandrarup.hush"
+VERSION = os.environ.get("HUSH_VERSION", "1.0.0").removeprefix("v")
+
+APP = [str(REPO_ROOT / "main.py")]
+DATA = [
+    ("ui", [
+        str(REPO_ROOT / "voiceflow/web/ui/index.html"),
+        str(REPO_ROOT / "voiceflow/web/ui/onboarding.html"),
+    ]),
 ]
 OPTIONS = {
     'argv_emulation': False,
     'semi_standalone': False,
+    'iconfile': str(REPO_ROOT / 'assets/HushIcon.icns'),
     'plist': {
         # App identity
-        'CFBundleName':            'VoiceFlow',
-        'CFBundleIdentifier':      'com.voiceflow.app',
-        'CFBundleVersion':         '1.0.0',
-        'CFBundleShortVersionString': '1.0',
-        'NSHumanReadableCopyright': 'Copyright © 2026 VoiceFlow',
+        'CFBundleName':            APP_NAME,
+        'CFBundleDisplayName':     APP_NAME,
+        'CFBundleIdentifier':      BUNDLE_ID,
+        'CFBundleVersion':         VERSION,
+        'CFBundleShortVersionString': VERSION,
+        'NSHumanReadableCopyright': 'Copyright © 2026 Hush',
         # macOS permissions (Info.plist usage descriptions)
         'NSMicrophoneUsageDescription':
-            'VoiceFlow needs microphone access to transcribe your speech.',
+            'Hush needs microphone access to transcribe your speech.',
         'NSAppleEventsUsageDescription':
-            'VoiceFlow needs Accessibility access to type text into other apps.',
+            'Hush uses System Events only to paste your approved dictation into the active app.',
         # Hide from Dock (runs as menu bar app only)
         'LSUIElement': True,
         'LSBackgroundOnly': False,
@@ -54,9 +56,15 @@ OPTIONS = {
         'faster_whisper', 'sounddevice', '_sounddevice_data',
         'pynput', 'ollama', 'requests', 'toml',
         'pystray', 'PIL', 'plyer',
-        'numpy', 'transformers',
+        'numpy', 'AVFoundation', 'ApplicationServices', 'Quartz',
     ],
-    'excludes': ['tkinter', 'test', 'unittest'],
+    # The first distributable app uses faster-whisper. Keeping the optional
+    # Parakeet/Torch stack out avoids a multi-gigabyte bundle and lets its
+    # conditional import fall back to Whisper at runtime.
+    'excludes': [
+        'tkinter', 'test', 'unittest',
+        'torch', 'torchvision', 'torchaudio', 'transformers', 'librosa',
+    ],
     'strip': True,
 }
 
@@ -64,6 +72,6 @@ setup(
     app=APP,
     data_files=DATA,
     options={'py2app': OPTIONS},
-    name='VoiceFlow',
-    version='1.0.0',
+    name=APP_NAME,
+    version=VERSION,
 )

@@ -17,6 +17,7 @@ import asyncio
 import json
 import os
 import pathlib
+import sys
 import tempfile
 import threading
 from typing import Any, Callable
@@ -25,7 +26,6 @@ try:
     from fastapi import FastAPI, Request
     from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
     from fastapi.staticfiles import StaticFiles
-    from fastapi.middleware.cors import CORSMiddleware
     import uvicorn
     _FASTAPI_OK = True
 except ImportError:
@@ -63,6 +63,7 @@ _sub_lock = threading.Lock()
 _event_loop: asyncio.AbstractEventLoop | None = None
 _hotkey_updater: Callable[[str], bool] | None = None
 _runtime_config_updater: Callable[[dict[str, Any]], None] | None = None
+_onboarding_reconnect_event = threading.Event()
 
 _VALID_CLEANUP_LEVELS = {"none", "light", "medium", "high"}
 _VALID_ASR_ENGINES = {"auto", "parakeet", "whisper"}
@@ -78,6 +79,16 @@ def register_runtime_config_updater(updater: Callable[[dict[str, Any]], None]) -
     """Register the application callback for settings changed at runtime."""
     global _runtime_config_updater
     _runtime_config_updater = updater
+
+
+def begin_onboarding_reconnect_window() -> None:
+    """Clear the reconnect signal before Hush resumes an unfinished setup."""
+    _onboarding_reconnect_event.clear()
+
+
+def wait_for_onboarding_reconnect(timeout_seconds: float) -> bool:
+    """Wait briefly for the existing onboarding page to resume permission polling."""
+    return _onboarding_reconnect_event.wait(timeout_seconds)
 
 
 def push_event(event: dict):
@@ -105,15 +116,9 @@ def push_event(event: dict):
 if _FASTAPI_OK:
     app = FastAPI(title="Hush", docs_url=None, redoc_url=None)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # Serve dashboard static files
-    _UI_DIR = pathlib.Path(__file__).parent / "ui"
+    _source_ui_dir = pathlib.Path(__file__).parent / "ui"
+    _bundle_ui_dir = pathlib.Path(sys.executable).parent.parent / "Resources" / "ui"
+    _UI_DIR = _source_ui_dir if _source_ui_dir.exists() else _bundle_ui_dir
 
     @app.on_event("startup")
     async def _startup():
@@ -306,9 +311,31 @@ if _FASTAPI_OK:
         get_platform_services().permissions.mark_onboarded()
         return {"ok": True}
 
+    @app.post("/onboarding/start")
+    async def onboarding_start():
+        get_platform_services().permissions.begin_onboarding()
+        return {"ok": True}
+
+    @app.post("/onboarding/reconnect")
+    async def onboarding_reconnect():
+        _onboarding_reconnect_event.set()
+        return {"ok": True}
+
     @app.get("/permissions")
     async def get_permissions():
-        return get_platform_services().permissions.get_all_permissions()
+        return JSONResponse(
+            get_platform_services().permissions.get_all_permissions(),
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.post("/permissions/request/{perm_type}")
+    async def request_permission(perm_type: str):
+        permissions = get_platform_services().permissions
+        ok = permissions.request_permission(perm_type)
+        response = {"ok": ok}
+        if getattr(permissions, "last_permission_request_opened_settings", False):
+            response["opened_settings"] = True
+        return response
 
     @app.post("/permissions/open/{perm_type}")
     async def open_permission(perm_type: str):

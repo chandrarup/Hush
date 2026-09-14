@@ -14,6 +14,7 @@ from .backends.linux.text_injection import LinuxTextInjector
 from .backends.macos.context import MacOSActiveContext
 from .backends.macos.notifications import MacOSNotifications
 from .backends.macos.permissions import MacOSPermissions
+from .backends.macos.recording_hud import MacOSRecordingHUD
 from .backends.macos.text_injection import MacOSTextInjector
 from .backends.windows.context import WindowsContext
 from .backends.windows.notifications import WindowsNotifications
@@ -30,8 +31,13 @@ class _TrayService:
         return self._tray
 
 
-def _tray_for(permissions) -> _TrayService:
-    return _TrayService(TrayIcon(open_settings=lambda: permissions.open_system_settings("accessibility")))
+def _tray_for(permissions, activity_hud=None) -> _TrayService:
+    return _TrayService(
+        TrayIcon(
+            open_settings=lambda: permissions.open_system_settings("accessibility"),
+            activity_hud=activity_hud,
+        )
+    )
 
 
 class MacOSPlatformServices(PlatformServices):
@@ -43,7 +49,7 @@ class MacOSPlatformServices(PlatformServices):
             text=MacOSTextInjector(),
             notifications=MacOSNotifications(),
             context=MacOSActiveContext(),
-            tray=_tray_for(permissions),
+            tray=_tray_for(permissions, activity_hud=MacOSRecordingHUD()),
             permissions=permissions,
         )
 

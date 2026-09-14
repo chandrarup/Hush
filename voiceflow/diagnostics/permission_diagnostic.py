@@ -22,6 +22,8 @@ def find_python_app(executable: str | None = None, base_prefix: str | None = Non
 
 
 def main() -> None:
+    print("This diagnostic is for a source checkout, not an installed Hush.app.")
+    print("For Hush.app, enable Hush under Microphone and Accessibility only.\n")
     print("Let's Hush. Permission guide\n")
     if sys.platform != "darwin":
         print("These privacy steps apply only to macOS. See docs/setup.md for your platform.")

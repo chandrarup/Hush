@@ -1,4 +1,4 @@
-"""Cross-platform pystray implementation with injected settings behavior."""
+"""Cross-platform pystray control with an optional activity HUD."""
 
 from __future__ import annotations
 
@@ -21,37 +21,31 @@ except ImportError:
 
 ICON_SIZE = 64
 CIRCLE_PADDING = 8
-ANIM_INTERVAL = 0.25
-STATE_COLORS = {
-    "idle": "#888888",
-    "recording": "#E53935",
-    "processing": ["#FF6F00", "#FFB300", "#FF8F00", "#FFA000"],
-}
-
-
-def _make_image(color: str):
+def _make_menu_image():
+    """Draw a static waveform mark instead of a distracting status dot."""
     image = Image.new("RGBA", (ICON_SIZE, ICON_SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
-    draw.ellipse(
-        [CIRCLE_PADDING, CIRCLE_PADDING, ICON_SIZE - CIRCLE_PADDING, ICON_SIZE - CIRCLE_PADDING],
-        fill=color,
-    )
+    heights = (16, 28, 40, 24, 34)
+    x = 14
+    for height in heights:
+        top = (ICON_SIZE - height) // 2
+        draw.rounded_rectangle([x, top, x + 5, top + height], radius=2, fill="#8FA5A5")
+        x += 8
     return image
 
 
 class TrayIcon:
     """A pystray menu with no operating-system-specific behavior."""
 
-    def __init__(self, open_settings: Callable[[], bool] | None = None) -> None:
+    def __init__(self, open_settings: Callable[[], bool] | None = None, activity_hud=None) -> None:
         self._state = "idle"
         self._icon = None
         self._lock = threading.Lock()
-        self._animation_thread = None
-        self._animation_stop = threading.Event()
         self._on_quit = None
         self._on_settings = None
         self._dashboard_port = 57327
         self._open_settings = open_settings or (lambda: False)
+        self._activity_hud = activity_hud
         self._enabled = _PIL_AVAILABLE and _PYSTRAY_AVAILABLE
 
     def setup(self, on_quit=None, on_settings=None, dashboard_port: int = 57327):
@@ -60,6 +54,8 @@ class TrayIcon:
         self._dashboard_port = dashboard_port
 
     def run_blocking(self):
+        if self._activity_hud is not None:
+            self._activity_hud.prepare()
         if not self._enabled:
             print("[tray] Tray disabled — running headlessly.")
             try:
@@ -70,6 +66,7 @@ class TrayIcon:
 
         menu = pystray.Menu(
             pystray.MenuItem("Open Dashboard", self._dashboard_action, default=True),
+            pystray.MenuItem("Run Setup Again", self._setup_action),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Settings (config)", self._settings_action),
             pystray.Menu.SEPARATOR,
@@ -77,7 +74,7 @@ class TrayIcon:
         )
         self._icon = pystray.Icon(
             name="Hush",
-            icon=_make_image(STATE_COLORS["idle"]),
+            icon=_make_menu_image(),
             title="Hush — Idle",
             menu=menu,
         )
@@ -91,21 +88,20 @@ class TrayIcon:
             if self._state == state:
                 return
             self._state = state
-        self._stop_animation()
-        if state == "processing":
-            self._start_animation()
-        else:
-            self._update_icon(_make_image(STATE_COLORS.get(state, "#888888")), state)
+        if self._activity_hud is not None:
+            self._activity_hud.set_state(state)
+        self._update_title(state)
 
     def stop(self):
-        self._stop_animation()
+        if self._activity_hud is not None:
+            self._activity_hud.set_state("idle")
         if self._icon is not None:
             try:
                 self._icon.stop()
             except Exception:
                 pass
 
-    def _update_icon(self, image, state: str):
+    def _update_title(self, state: str):
         if self._icon is None:
             return
         titles = {
@@ -114,29 +110,9 @@ class TrayIcon:
             "processing": "Hush — Processing…",
         }
         try:
-            self._icon.icon = image
             self._icon.title = titles.get(state, "Hush")
         except Exception:
             pass
-
-    def _start_animation(self):
-        self._animation_stop.clear()
-        self._animation_thread = threading.Thread(target=self._animate, daemon=True, name="tray-animation")
-        self._animation_thread.start()
-
-    def _stop_animation(self):
-        self._animation_stop.set()
-        if self._animation_thread and self._animation_thread.is_alive():
-            self._animation_thread.join(timeout=1.0)
-        self._animation_thread = None
-
-    def _animate(self):
-        colors = STATE_COLORS["processing"]
-        frame = 0
-        while not self._animation_stop.is_set():
-            self._update_icon(_make_image(colors[frame % len(colors)]), "processing")
-            frame += 1
-            time.sleep(ANIM_INTERVAL)
 
     def _quit_action(self, _icon, _item):
         self.stop()
@@ -147,6 +123,11 @@ class TrayIcon:
         import webbrowser
 
         webbrowser.open(f"http://localhost:{self._dashboard_port}/")
+
+    def _setup_action(self, _icon, _item):
+        import webbrowser
+
+        webbrowser.open(f"http://localhost:{self._dashboard_port}/onboarding")
 
     def _settings_action(self, _icon, _item):
         if self._on_settings:
