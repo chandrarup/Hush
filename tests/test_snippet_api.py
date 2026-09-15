@@ -14,7 +14,11 @@ def test_snippet_api_round_trip(tmp_path, monkeypatch):
 
     async def exercise():
         transport = httpx.ASGITransport(app=api_server.app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Origin": "http://test"},
+        ) as client:
             created = await client.post(
                 "/snippets",
                 json={

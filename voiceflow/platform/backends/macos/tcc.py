@@ -76,6 +76,30 @@ def is_microphone_authorized() -> bool:
         return False
 
 
+def microphone_authorization_status() -> str:
+    """Return the microphone state needed to choose a user-initiated recovery."""
+    try:
+        from AVFoundation import (
+            AVCaptureDevice,
+            AVAuthorizationStatusAuthorized,
+            AVAuthorizationStatusDenied,
+            AVAuthorizationStatusNotDetermined,
+            AVAuthorizationStatusRestricted,
+            AVMediaTypeAudio,
+        )
+
+        status = AVCaptureDevice.authorizationStatusForMediaType_(AVMediaTypeAudio)
+        states = {
+            AVAuthorizationStatusAuthorized: "authorized",
+            AVAuthorizationStatusNotDetermined: "not_determined",
+            AVAuthorizationStatusDenied: "denied",
+            AVAuthorizationStatusRestricted: "restricted",
+        }
+        return states.get(status, "unknown")
+    except Exception:
+        return "unknown"
+
+
 def request_microphone() -> bool:
     """Start the native microphone authorization request without blocking the UI."""
     try:

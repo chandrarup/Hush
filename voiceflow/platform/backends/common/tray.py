@@ -82,14 +82,14 @@ class TrayIcon:
         self._icon.run()
 
     def set_state(self, state: str):
-        if not self._enabled:
-            return
         with self._lock:
             if self._state == state:
                 return
             self._state = state
         if self._activity_hud is not None:
             self._activity_hud.set_state(state)
+        if not self._enabled:
+            return
         self._update_title(state)
 
     def stop(self):

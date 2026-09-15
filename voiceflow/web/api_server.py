@@ -120,6 +120,15 @@ if _FASTAPI_OK:
     _bundle_ui_dir = pathlib.Path(sys.executable).parent.parent / "Resources" / "ui"
     _UI_DIR = _source_ui_dir if _source_ui_dir.exists() else _bundle_ui_dir
 
+    @app.middleware("http")
+    async def _require_same_origin_for_mutations(request: Request, call_next):
+        """Reject browser mutations that did not originate from this dashboard."""
+        if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            expected_origin = str(request.base_url).rstrip("/")
+            if request.headers.get("origin") != expected_origin:
+                return JSONResponse({"error": "Cross-origin request rejected."}, status_code=403)
+        return await call_next(request)
+
     @app.on_event("startup")
     async def _startup():
         global _event_loop

@@ -22,7 +22,6 @@ from ..config import load_config, load_snippets, load_vocab
 from ..config.snippets import expand_snippets, is_exact_shortcut
 from ..core.audio import AudioRecorder
 from ..core.vad import trim_silence, audio_duration
-from ..core.transcriber import create_transcriber
 from ..core.cleaner import clean_transcript, set_docker_llm_available
 from ..core import history as _history
 from ..platform.factory import get_platform_services
@@ -76,6 +75,20 @@ def _open_browser_after_server_start(dashboard_port: int, first_launch: bool) ->
         webbrowser.open(url, new=2)
 
     threading.Thread(target=_open_browser, daemon=True).start()
+
+
+def _recover_resumed_onboarding(dashboard_port: int, timeout_seconds: float = 5) -> threading.Thread:
+    """Open setup only when the browser page from a TCC restart did not reconnect."""
+    def _recover() -> None:
+        if _api.wait_for_onboarding_reconnect(timeout_seconds):
+            print("[main] Existing onboarding page reconnected.")
+            return
+        print("[main] Onboarding page did not reconnect; opening setup again.")
+        _open_browser_after_server_start(dashboard_port, first_launch=True)
+
+    thread = threading.Thread(target=_recover, daemon=True)
+    thread.start()
+    return thread
 
 
 # ──────────────────────────────────────────────────────────────────── #
@@ -383,6 +396,8 @@ def main():
     global _config, _vocab, _transcriber, _recorder, _hotkey_target
 
     configure_runtime_environment()
+    # Import model providers after their packaged cache location is configured.
+    from ..core.transcriber import create_transcriber
 
     print("=" * 60)
     print("  Hush — Local Push-to-Talk Dictation")
@@ -398,6 +413,13 @@ def main():
     ui_cfg = _config.get("ui", {})
     dashboard_port = ui_cfg.get("dashboard_port", 57327)
     asr_cfg = _config.get("asr", {})
+    first_launch = _platform.permissions.is_first_launch()
+    resuming_onboarding = first_launch and _platform.permissions.is_onboarding_in_progress()
+    if resuming_onboarding:
+        _api.begin_onboarding_reconnect_window()
+    if first_launch:
+        _platform.permissions.begin_onboarding()
+
     _api.start_server(port=dashboard_port)
     _api.update_state(
         cleanup_level=_config.get("llm", {}).get("cleanup_level", "light"),
@@ -406,11 +428,9 @@ def main():
         ollama_model=_config.get("llm", {}).get("ollama_model", "llama3.2:3b"),
     )
 
-    first_launch = _platform.permissions.is_first_launch()
-    resuming_onboarding = first_launch and _platform.permissions.is_onboarding_in_progress()
-    if first_launch:
-        _platform.permissions.begin_onboarding()
-    if not resuming_onboarding:
+    if resuming_onboarding:
+        _recover_resumed_onboarding(dashboard_port)
+    else:
         _open_browser_after_server_start(dashboard_port, first_launch)
     if first_launch:
         if resuming_onboarding:
