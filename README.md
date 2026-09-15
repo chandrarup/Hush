@@ -227,6 +227,30 @@ CAR-T
 
 ---
 
+## Native Xcode macOS app (migration scaffold)
+
+This repository now includes a native macOS rewrite scaffold in:
+
+- `native/VoiceFlowNative/project.yml`
+- `native/README_NATIVE_XCODE.md`
+
+Use XcodeGen to generate and open a real Xcode project:
+
+```bash
+brew install xcodegen
+cd native/VoiceFlowNative
+xcodegen generate --spec project.yml
+open VoiceFlowNative.xcodeproj
+```
+
+The native scaffold includes:
+- menu bar app shell
+- native config/history stores
+- one-time import from legacy `~/.voiceflow` config/history
+- macOS CI workflow to build and package a DMG
+
+---
+
 ## Project Structure
 
 ```
