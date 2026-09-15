@@ -19,7 +19,11 @@ def test_hotkey_setting_updates_runtime_state_and_persists(monkeypatch):
 
     async def exercise():
         transport = httpx.ASGITransport(app=api_server.app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Origin": "http://test"},
+        ) as client:
             return await client.post("/settings", json={"hotkey": "ctrl_r"})
 
     response = asyncio.run(exercise())
@@ -35,7 +39,11 @@ def test_hotkey_setting_rejects_empty_value(monkeypatch):
 
     async def exercise():
         transport = httpx.ASGITransport(app=api_server.app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Origin": "http://test"},
+        ) as client:
             return await client.post("/settings", json={"hotkey": "   "})
 
     response = asyncio.run(exercise())

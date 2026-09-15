@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import time
 
-import objc
-
 try:
+    import objc
     from AppKit import (
         NSBackingStoreBuffered,
         NSBezierPath,

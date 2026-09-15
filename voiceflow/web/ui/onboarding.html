@@ -152,7 +152,7 @@ h1 { font-size: 26px; font-weight: 700; margin-bottom: 8px; }
           <div class="perm-guide-inner">
             <h5>📋 What to do</h5>
             <ol>
-              <li>Choose <strong>Allow</strong> in the macOS microphone dialog.</li>
+              <li id="mic-guide-action">Choose <strong>Allow</strong> in the macOS microphone dialog.</li>
               <li>Come back here. This check updates automatically.</li>
             </ol>
           </div>
@@ -281,6 +281,7 @@ function goTo(n) {
 // ── Permissions ───────────────────────────────────────────────────── //
 async function pollPerms() {
   try {
+    await fetch(API + '/onboarding/reconnect', { method: 'POST' });
     const p = await fetch(API + '/permissions?at=' + Date.now(), { cache: 'no-store' }).then(r => r.json());
     updatePermRow('mic', p.microphone);
     updatePermRow('acc', p.accessibility);
@@ -326,6 +327,10 @@ async function grantPerm(type) {
   try {
     const response = await fetch(API + '/permissions/request/' + type, { method: 'POST' });
     if (!response.ok) throw new Error('Permission request failed');
+    const result = await response.json();
+    if (type === 'microphone' && result.opened_settings) {
+      document.getElementById('mic-guide-action').innerHTML = 'Turn on <strong>Hush</strong> in Microphone settings.';
+    }
   } catch (error) {}
   setTimeout(pollPerms, 500);
 }
