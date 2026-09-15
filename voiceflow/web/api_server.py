@@ -1,5 +1,5 @@
 """
-api_server.py — Local FastAPI server for the VoiceFlow dashboard.
+api_server.py — Local FastAPI server for the Hush dashboard.
 
 Runs on http://localhost:57327 (loopback only).
 Serves:
@@ -90,7 +90,7 @@ def push_event(event: dict):
 # ── App ───────────────────────────────────────────────────────────── #
 
 if _FASTAPI_OK:
-    app = FastAPI(title="VoiceFlow", docs_url=None, redoc_url=None)
+    app = FastAPI(title="Hush", docs_url=None, redoc_url=None)
 
     app.add_middleware(
         CORSMiddleware,

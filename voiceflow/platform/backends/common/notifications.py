@@ -38,7 +38,7 @@ def show_transcript_result(
     print(f"[notification] Clean: {clean_short}")
     threading.Thread(
         target=dispatch,
-        args=("VoiceFlow", message, duration_seconds),
+        args=("Hush", message, duration_seconds),
         daemon=True,
         name="notification",
     ).start()
