@@ -1,5 +1,5 @@
 """
-VoiceFlow application orchestration.
+Hush application orchestration.
 
 The application layer is platform-neutral. Operating-system behavior is supplied
 by ``PlatformServices`` and selected once by the platform factory.
@@ -351,7 +351,7 @@ def main():
     global _config, _vocab, _transcriber, _recorder, _hotkey_target
 
     print("=" * 60)
-    print("  VoiceFlow — Local Push-to-Talk Dictation")
+    print("  Hush — Local Push-to-Talk Dictation")
     print("=" * 60)
 
     # ── Config ───────────────────────────────────────────────────────

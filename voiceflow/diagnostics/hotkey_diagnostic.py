@@ -23,7 +23,7 @@ def main() -> None:
         print(f"[diag] RELEASE {repr(key):<35} (type={type(key).__name__})")
 
     print("=" * 60)
-    print("VoiceFlow Global Hotkey Diagnostic")
+    print("Hush Global Hotkey Diagnostic")
     print("=" * 60)
     print("Press any key to test. Press Ctrl+C to quit.\n")
 

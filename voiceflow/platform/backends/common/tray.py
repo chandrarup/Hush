@@ -73,12 +73,12 @@ class TrayIcon:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Settings (config)", self._settings_action),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit VoiceFlow", self._quit_action),
+            pystray.MenuItem("Quit Hush", self._quit_action),
         )
         self._icon = pystray.Icon(
-            name="VoiceFlow",
+            name="Hush",
             icon=_make_image(STATE_COLORS["idle"]),
-            title="VoiceFlow — Idle",
+            title="Hush — Idle",
             menu=menu,
         )
         print("[tray] Starting tray icon on main thread.")
@@ -109,13 +109,13 @@ class TrayIcon:
         if self._icon is None:
             return
         titles = {
-            "idle": "VoiceFlow — Idle",
-            "recording": "VoiceFlow — Recording…",
-            "processing": "VoiceFlow — Processing…",
+            "idle": "Hush — Idle",
+            "recording": "Hush — Recording…",
+            "processing": "Hush — Processing…",
         }
         try:
             self._icon.icon = image
-            self._icon.title = titles.get(state, "VoiceFlow")
+            self._icon.title = titles.get(state, "Hush")
         except Exception:
             pass
 
