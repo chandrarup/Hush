@@ -1,6 +1,7 @@
-"""Configuration loading and default values."""
+"""Configuration loading, project-local paths, and default values."""
 
 from .loader import CONFIG_DIR, CONFIG_PATH, VOCAB_PATH, load_config, load_vocab
+from .paths import DATA_DIR, HISTORY_DB_PATH, ONBOARDED_PATH, PROJECT_ROOT
 from .snippets import (
     SNIPPETS_PATH,
     add_snippet,
@@ -13,6 +14,10 @@ from .snippets import (
 __all__ = [
     "CONFIG_DIR",
     "CONFIG_PATH",
+    "DATA_DIR",
+    "HISTORY_DB_PATH",
+    "ONBOARDED_PATH",
+    "PROJECT_ROOT",
     "SNIPPETS_PATH",
     "VOCAB_PATH",
     "add_snippet",

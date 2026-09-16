@@ -1,16 +1,11 @@
-"""
-config.py — Loads ~/.voiceflow/config.toml and provides defaults.
-Creates the config file and vocab file if they do not exist.
-"""
+"""Load project-local configuration and vocabulary files."""
 
-import pathlib
 import toml
 
 from .defaults import DEFAULT_CONFIG
+from .migration import migrate_legacy_data
+from .paths import CONFIG_DIR, CONFIG_PATH, VOCAB_PATH
 
-CONFIG_DIR = pathlib.Path.home() / ".voiceflow"
-CONFIG_PATH = CONFIG_DIR / "config.toml"
-VOCAB_PATH = CONFIG_DIR / "vocab.txt"
 
 def _write_default_config():
     """Write the default config to disk."""
@@ -41,10 +36,12 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 def load_config() -> dict:
     """
-    Load configuration from ~/.voiceflow/config.toml.
+    Load configuration from data/config.toml.
     Creates the file with defaults if it does not exist.
     Returns a fully-populated config dict (missing keys filled from defaults).
     """
+    for action in migrate_legacy_data():
+        print(f"[config] {action}")
     _ensure_vocab()
 
     if not CONFIG_PATH.exists():
@@ -64,7 +61,7 @@ def load_config() -> dict:
 
 def load_vocab() -> list[str]:
     """
-    Load personal vocabulary from ~/.voiceflow/vocab.txt.
+    Load personal vocabulary from data/vocab.txt.
     Returns a list of non-empty, stripped strings.
     """
     _ensure_vocab()

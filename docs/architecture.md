@@ -30,6 +30,9 @@ PlatformServices  <-- stable capability contracts
   by capability: text injection, notifications, context, and permissions.
 - `voiceflow/platform/backends/common/` contains implementations reusable by
   more than one platform, such as the tray and clipboard helpers.
+- `data/` contains runtime-owned configuration, vocabulary, snippets, onboarding
+  state, logs, and the SQLite history database. These files stay inside the
+  project checkout and are excluded from Git commits.
 
 ## Application dependency management
 

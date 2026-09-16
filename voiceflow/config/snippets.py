@@ -13,10 +13,9 @@ from typing import Any
 
 import toml
 
-from .loader import CONFIG_DIR
+from .paths import CONFIG_DIR, SNIPPETS_PATH
 
 
-SNIPPETS_PATH = CONFIG_DIR / "snippets.toml"
 _STORE_LOCK = threading.RLock()
 
 

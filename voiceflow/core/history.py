@@ -6,11 +6,12 @@ LLM-cleaned output, cleanup level, and active app name.
 """
 
 import sqlite3
-import pathlib
-import json
 from datetime import datetime
 
-DB_PATH = pathlib.Path.home() / ".voiceflow" / "history.db"
+from ..config.paths import HISTORY_DB_PATH
+
+
+DB_PATH = HISTORY_DB_PATH
 
 
 def _conn() -> sqlite3.Connection:

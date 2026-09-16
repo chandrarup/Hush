@@ -38,6 +38,7 @@ from ..config.snippets import (
     SnippetConflictError,
     update_snippet,
 )
+from ..config.paths import CONFIG_PATH
 from ..platform.factory import get_platform_services
 
 # ── Shared state (updated by main.py) ─────────────────────────────── #
@@ -283,27 +284,26 @@ if _FASTAPI_OK:
 
 
 def _persist_cleanup_level(level: str):
-    """Write cleanup_level back to ~/.voiceflow/config.toml."""
+    """Write cleanup_level back to the project-local config.toml."""
     try:
         import toml
-        config_path = pathlib.Path.home() / ".voiceflow" / "config.toml"
-        cfg = toml.load(str(config_path)) if config_path.exists() else {}
+        cfg = toml.load(str(CONFIG_PATH)) if CONFIG_PATH.exists() else {}
         cfg.setdefault("llm", {})["cleanup_level"] = level
-        with open(config_path, "w") as f:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_PATH, "w") as f:
             toml.dump(cfg, f)
     except Exception as e:
         print(f"[api] Could not persist cleanup_level: {e}")
 
 
 def _persist_hotkey(key: str):
-    """Write the selected hotkey back to ~/.voiceflow/config.toml."""
+    """Write the selected hotkey back to the project-local config.toml."""
     try:
         import toml
-        config_path = pathlib.Path.home() / ".voiceflow" / "config.toml"
-        cfg = toml.load(str(config_path)) if config_path.exists() else {}
+        cfg = toml.load(str(CONFIG_PATH)) if CONFIG_PATH.exists() else {}
         cfg.setdefault("hotkey", {})["key"] = key
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(config_path, "w") as f:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(CONFIG_PATH, "w") as f:
             toml.dump(cfg, f)
     except Exception as e:
         print(f"[api] Could not persist hotkey: {e}")

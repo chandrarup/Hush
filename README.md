@@ -95,7 +95,7 @@ bash scripts/setup_cross_platform.sh
 ```
 
 Both setup paths use `uv` to create or update the application environment,
-create the `~/.voiceflow` files, and prepare the local LLM. The macOS installer
+create the project-local `data/` files, and prepare the local LLM. The macOS installer
 is the recommended path for this repository.
 
 ### 4. Launch VoiceFlow
@@ -133,7 +133,7 @@ ollama pull llama3.2:3b
 
 ## Configuration
 
-Edit `~/.voiceflow/config.toml`:
+Edit `data/config.toml`:
 
 ```toml
 [hotkey]
@@ -197,11 +197,11 @@ dashboard_port = 57327
 
 ## Personal Vocabulary
 
-Add custom words, names, or technical terms to `~/.voiceflow/vocab.txt` (one per line).
+Add custom words, names, or technical terms to `data/vocab.txt` (one per line).
 These are passed to Whisper as hints to improve recognition accuracy.
 
 ```
-# ~/.voiceflow/vocab.txt — example
+# data/vocab.txt — example
 LangChain
 PyTorch
 Professor Roysam

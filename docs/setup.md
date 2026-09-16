@@ -117,7 +117,7 @@ of cleaned text.
 
 ## 5. Create VoiceFlow Config Files
 
-The app creates `~/.voiceflow/config.toml` and `~/.voiceflow/vocab.txt` on first
+The app creates `data/config.toml` and `data/vocab.txt` inside the project on first
 startup. To create them without launching the whole app:
 
 ```bash
@@ -315,7 +315,7 @@ uv run --no-dev python -m voiceflow.diagnostics.hotkey_diagnostic
 If no key events appear, fix Input Monitoring. Add Terminal, ChatGPT/Codex, and
 Python.app, then fully quit and reopen the launcher.
 
-If key events appear but recording does not start, check `~/.voiceflow/config.toml`
+If key events appear but recording does not start, check `data/config.toml`
 and try a simpler hotkey:
 
 ```toml

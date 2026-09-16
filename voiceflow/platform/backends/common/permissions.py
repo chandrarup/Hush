@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from ....config.paths import DATA_DIR, ONBOARDED_PATH
 
 
 class DesktopPermissions:
     """Best-effort permission checks for platforms without special privacy APIs."""
 
     def __init__(self, permission_guide: str = "") -> None:
-        self._voiceflow_dir = Path.home() / ".voiceflow"
-        self._onboarded_flag = self._voiceflow_dir / ".onboarded"
+        self._data_dir = DATA_DIR
+        self._onboarded_flag = ONBOARDED_PATH
         self._permission_guide = permission_guide
 
     def is_first_launch(self) -> bool:
         return not self._onboarded_flag.exists()
 
     def mark_onboarded(self) -> None:
-        self._voiceflow_dir.mkdir(parents=True, exist_ok=True)
+        self._data_dir.mkdir(parents=True, exist_ok=True)
         self._onboarded_flag.touch()
 
     def check_accessibility_permission(self) -> bool:
