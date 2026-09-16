@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 
 from ....config.paths import DATA_DIR, ONBOARDED_PATH
-from voiceflow.runtime import is_packaged_macos_app
+from voiceflow.runtime import is_packaged_macos_app, user_data_dir
 
 
 def _packaged_app_install_marker() -> str | None:
@@ -34,8 +34,10 @@ class DesktopPermissions:
     """Best-effort permission checks for platforms without special privacy APIs."""
 
     def __init__(self, permission_guide: str = "") -> None:
-        self._data_dir = DATA_DIR
-        self._onboarded_flag = ONBOARDED_PATH
+        self._data_dir = user_data_dir() if is_packaged_macos_app() else DATA_DIR
+        self._onboarded_flag = (
+            self._data_dir / ".onboarded" if is_packaged_macos_app() else ONBOARDED_PATH
+        )
         self._onboarding_in_progress_flag = self._data_dir / ".onboarding_in_progress"
         self._install_marker_flag = self._data_dir / ".installed_bundle"
         self._permission_guide = permission_guide

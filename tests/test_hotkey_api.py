@@ -61,7 +61,11 @@ def test_cleanup_setting_updates_live_runtime_and_persists(monkeypatch):
 
     async def exercise():
         transport = httpx.ASGITransport(app=api_server.app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Origin": "http://test"},
+        ) as client:
             return await client.post("/settings", json={"cleanup_level": "high"})
 
     response = asyncio.run(exercise())
@@ -82,7 +86,11 @@ def test_model_and_asr_settings_are_persisted(tmp_path, monkeypatch):
 
     async def exercise():
         transport = httpx.ASGITransport(app=api_server.app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"Origin": "http://test"},
+        ) as client:
             return await client.post(
                 "/settings",
                 json={"asr_engine": "whisper", "ollama_model": "phi3:mini"},
