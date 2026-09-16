@@ -48,6 +48,7 @@ def test_hush_opens_setup_once_then_dashboard_on_every_later_launch():
 
 def test_packaged_reinstall_reopens_onboarding_without_erasing_user_data(monkeypatch, tmp_path):
     monkeypatch.setattr(common_permissions, "user_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(common_permissions, "is_packaged_macos_app", lambda: True)
     monkeypatch.setattr(common_permissions, "_packaged_app_install_marker", lambda: "first-copy")
     permissions = common_permissions.DesktopPermissions()
 
@@ -278,7 +279,7 @@ def test_dashboard_does_not_allow_cross_origin_access():
     async def exercise():
         transport = httpx.ASGITransport(app=api_server.app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            return await client.get("/history", headers={"Origin": "https://evil.example"})
+            return await client.get("/status", headers={"Origin": "https://evil.example"})
 
     response = asyncio.run(exercise())
 
