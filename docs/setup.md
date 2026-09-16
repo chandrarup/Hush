@@ -1,16 +1,16 @@
-# VoiceFlow Setup Guide
+# Hush Setup Guide
 
-This file is the full setup checklist for running VoiceFlow on a new machine.
+This file is the full setup checklist for running Hush on a new machine.
 It includes the macOS privacy permissions that are easy to miss during a normal
 application dependency setup.
 
-VoiceFlow needs three separate things to work:
+Hush needs three separate things to work:
 
 - Input Monitoring: lets the app detect the push-to-talk hotkey.
 - Microphone: lets the app record audio.
 - Accessibility: lets the app paste/type the final transcript into the focused app.
 
-After changing any macOS privacy setting, quit the running VoiceFlow process and
+After changing any macOS privacy setting, quit the running Hush process and
 restart it. macOS usually does not apply these permissions to an already-running
 Python process.
 
@@ -69,7 +69,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 
 ## 3. Create The Python Environment With uv
 
-`pyproject.toml` is the source of truth for the VoiceFlow application. It keeps
+`pyproject.toml` is the source of truth for the Hush application. It keeps
 runtime, optional Parakeet, development, and packaging dependencies separate.
 `tool.uv.package = false` intentionally tells uv that this is an executable
 application, not a library that should be installed into site-packages.
@@ -112,10 +112,10 @@ In a second terminal, pull the cleanup model:
 ollama pull llama3.2:3b
 ```
 
-VoiceFlow can still run without Ollama, but it will inject raw ASR text instead
+Hush can still run without Ollama, but it will inject raw ASR text instead
 of cleaned text.
 
-## 5. Create VoiceFlow Config Files
+## 5. Create Hush Config Files
 
 The app creates `data/config.toml` and `data/vocab.txt` inside the project on first
 startup. To create them without launching the whole app:
@@ -155,7 +155,7 @@ Go to:
 System Settings -> Privacy & Security -> Input Monitoring
 ```
 
-Add and enable the process that launches VoiceFlow:
+Add and enable the process that launches Hush:
 
 - Terminal, if you run `python -m voiceflow.app.main` from Terminal.
 - ChatGPT or Codex, if you run it from the ChatGPT/Codex app terminal.
@@ -198,7 +198,7 @@ System Settings -> Privacy & Security -> Accessibility
 
 Add and enable the same launcher(s):
 
-- Terminal or ChatGPT/Codex, depending on where you run VoiceFlow.
+- Terminal or ChatGPT/Codex, depending on where you run Hush.
 - Python.app, using the same `Resources/Python.app` path above if needed.
 
 Accessibility is required for Quartz text injection. Without it, transcription
@@ -278,7 +278,7 @@ Expected:
 3 passed
 ```
 
-## 10. Launch VoiceFlow
+## 10. Launch Hush
 
 ```bash
 uv run --no-dev python -m voiceflow.app.main
@@ -392,5 +392,5 @@ ollama pull llama3.2:3b
 
 ### Avoiding Login Autostart
 
-`install.sh` creates a LaunchAgent so VoiceFlow starts at login. For a manual
+`install.sh` creates a LaunchAgent so Hush starts at login. For a manual
 developer setup, use the venv commands in this file instead of `install.sh`.

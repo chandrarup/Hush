@@ -15,7 +15,9 @@ Serves:
 
 import asyncio
 import json
+import os
 import pathlib
+import tempfile
 import threading
 from typing import Any, Callable
 
@@ -60,12 +62,22 @@ _subscribers: list[asyncio.Queue] = []
 _sub_lock = threading.Lock()
 _event_loop: asyncio.AbstractEventLoop | None = None
 _hotkey_updater: Callable[[str], bool] | None = None
+_runtime_config_updater: Callable[[dict[str, Any]], None] | None = None
+
+_VALID_CLEANUP_LEVELS = {"none", "light", "medium", "high"}
+_VALID_ASR_ENGINES = {"auto", "parakeet", "whisper"}
 
 
 def register_hotkey_updater(updater: Callable[[str], bool]) -> None:
     """Register the application callback used to apply a new hotkey immediately."""
     global _hotkey_updater
     _hotkey_updater = updater
+
+
+def register_runtime_config_updater(updater: Callable[[dict[str, Any]], None]) -> None:
+    """Register the application callback for settings changed at runtime."""
+    global _runtime_config_updater
+    _runtime_config_updater = updater
 
 
 def push_event(event: dict):
@@ -144,6 +156,14 @@ if _FASTAPI_OK:
     async def post_settings(request: Request):
         data = await request.json()
         allowed = {"cleanup_level", "hotkey", "asr_engine", "ollama_model"}
+        if "cleanup_level" in data and data["cleanup_level"] not in _VALID_CLEANUP_LEVELS:
+            return JSONResponse({"error": "Invalid cleanup level."}, status_code=400)
+        if "asr_engine" in data and data["asr_engine"] not in _VALID_ASR_ENGINES:
+            return JSONResponse({"error": "Invalid speech recognition engine."}, status_code=400)
+        if "ollama_model" in data and (
+            not isinstance(data["ollama_model"], str) or not data["ollama_model"].strip()
+        ):
+            return JSONResponse({"error": "A valid language model is required."}, status_code=400)
         if "hotkey" in data:
             if not isinstance(data["hotkey"], str) or not data["hotkey"].strip():
                 return JSONResponse({"error": "A valid hotkey is required."}, status_code=400)
@@ -152,12 +172,25 @@ if _FASTAPI_OK:
         for k, v in data.items():
             if k in allowed:
                 _state[k] = v
+        runtime_updates = {
+            key: data[key]
+            for key in ("cleanup_level", "asr_engine", "ollama_model")
+            if key in data
+        }
+        if runtime_updates and _runtime_config_updater is not None:
+            _runtime_config_updater(runtime_updates)
         # Persist cleanup_level to config if changed
         if "cleanup_level" in data:
             _persist_cleanup_level(data["cleanup_level"])
+        if "asr_engine" in data or "ollama_model" in data:
+            _persist_runtime_settings(runtime_updates)
         if "hotkey" in data:
             _persist_hotkey(data["hotkey"])
-        return {"ok": True, "state": dict(_state)}
+        return {
+            "ok": True,
+            "state": dict(_state),
+            "restart_required": ["asr_engine"] if "asr_engine" in data else [],
+        }
 
     @app.get("/snippets")
     async def get_snippets():
@@ -285,15 +318,43 @@ if _FASTAPI_OK:
 
 def _persist_cleanup_level(level: str):
     """Write cleanup_level back to the project-local config.toml."""
+    _persist_config_updates({"cleanup_level": level})
+
+
+def _persist_runtime_settings(settings: dict[str, Any]) -> None:
+    """Persist settings whose values can change from the dashboard."""
+    _persist_config_updates(settings)
+
+
+def _persist_config_updates(settings: dict[str, Any]) -> None:
+    """Update config.toml atomically without discarding unrelated settings."""
+    temporary_path: str | None = None
     try:
         import toml
         cfg = toml.load(str(CONFIG_PATH)) if CONFIG_PATH.exists() else {}
-        cfg.setdefault("llm", {})["cleanup_level"] = level
+        if "cleanup_level" in settings:
+            cfg.setdefault("llm", {})["cleanup_level"] = settings["cleanup_level"]
+        if "asr_engine" in settings:
+            cfg.setdefault("asr", {})["engine"] = settings["asr_engine"]
+        if "ollama_model" in settings:
+            cfg.setdefault("llm", {})["ollama_model"] = settings["ollama_model"]
         CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_PATH, "w") as f:
-            toml.dump(cfg, f)
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=CONFIG_PATH.parent,
+            prefix=f".{CONFIG_PATH.name}.", suffix=".tmp", delete=False,
+        ) as temporary:
+            toml.dump(cfg, temporary)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = temporary.name
+        os.replace(temporary_path, CONFIG_PATH)
     except Exception as e:
-        print(f"[api] Could not persist cleanup_level: {e}")
+        if temporary_path:
+            try:
+                os.unlink(temporary_path)
+            except OSError:
+                pass
+        print(f"[api] Could not persist settings: {e}")
 
 
 def _persist_hotkey(key: str):

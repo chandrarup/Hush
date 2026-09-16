@@ -59,6 +59,10 @@ info "Syncing application dependencies with uv (may take a few minutes)..."
 "$UV_BIN" sync --project "$REPO_DIR" --python "$PY" --extra parakeet --no-dev -q
 ok "Application dependencies installed"
 
+# Migrate legacy home-directory data before creating project-local defaults.
+info "Migrating legacy application data..."
+"$VENV/bin/python" -c 'from voiceflow.config.migration import migrate_legacy_data; [print(f"  {action}") for action in migrate_legacy_data()]'
+
 # ── 4. Check Ollama ───────────────────────────────────────────────── #
 info "Checking Ollama..."
 if ! command -v ollama &>/dev/null; then

@@ -14,9 +14,7 @@ Context-aware prompting: pass app_context (e.g. "Slack", "Code", "Mail")
 to get output formatted appropriately for the target app.
 """
 
-import threading
 import requests
-import json
 
 from ..prompts.cleanup import (
     APP_CONTEXT_HINTS,
@@ -32,8 +30,6 @@ try:
     _OLLAMA_SDK = True
 except ImportError:
     _OLLAMA_SDK = False
-
-LLM_TIMEOUT = 6   # seconds before we give up and return raw (was 10)
 
 # One-time availability cache — set by main.py after the startup probe.
 # None = unknown (will probe once), True = available, False = skip entirely.
@@ -103,7 +99,7 @@ def _call_docker_llm(
         "max_tokens": max_tokens,
         "stream": False,
     }
-    resp = requests.post(url, json=payload, timeout=LLM_TIMEOUT)
+    resp = requests.post(url, json=payload)
     resp.raise_for_status()
     data = resp.json()
     return data["choices"][0]["message"]["content"].strip()
@@ -147,7 +143,7 @@ def _call_ollama_http(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    resp = requests.post(url, json=payload, timeout=LLM_TIMEOUT)
+    resp = requests.post(url, json=payload)
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
 
@@ -256,14 +252,9 @@ def clean_transcript(
         print("[cleaner] All LLMs unavailable — using raw transcript.")
         result["error"] = "all_failed"
 
-    t = threading.Thread(target=_worker, daemon=True)
-    t.start()
-    t.join(timeout=LLM_TIMEOUT + 1)
-
-    if t.is_alive():
-        print("[cleaner] Timeout — returning raw transcript.")
-        return raw_transcript
-
+    # Cleanup is part of the committed pipeline result. Wait for the provider
+    # to finish before the caller injects text or persists history.
+    _worker()
     return result["text"] if result["text"] is not None else raw_transcript
 
 
@@ -274,7 +265,7 @@ def _detect_docker_model(base_url: str) -> str:
     """
     try:
         url = base_url.rstrip("/") + "/models"
-        resp = requests.get(url, timeout=3)
+        resp = requests.get(url)
         resp.raise_for_status()
         data = resp.json()
         models = data.get("data", [])

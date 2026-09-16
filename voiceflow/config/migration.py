@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import sqlite3
 from pathlib import Path
@@ -16,6 +17,8 @@ _MIGRATED_FILES = (
     ".onboarded",
     "voiceflow.log",
 )
+
+_SUPPORTED_DATABASE_TABLES = ("entries", "dictation_jobs")
 
 
 def _quote(identifier: str) -> str:
@@ -39,12 +42,70 @@ def _columns(connection: sqlite3.Connection, table: str, schema: str) -> list[st
     ]
 
 
+def _create_table_from_legacy(target: sqlite3.Connection, table: str) -> None:
+    row = target.execute(
+        f"SELECT sql FROM {_quote('legacy')}.sqlite_master "
+        "WHERE type = 'table' AND name = ?",
+        (table,),
+    ).fetchone()
+    statement = row[0] if row else None
+    if not statement:
+        raise RuntimeError(f"Could not read the schema for legacy table {table!r}.")
+
+    match = re.match(
+        r"^(?P<prefix>\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)(?P<name>\"(?:[^\"]|\"\")*\"|`[^`]+`|\[[^\]]+\]|'[^']+'|[A-Za-z_][A-Za-z0-9_]*)(?P<rest>\s*\(.*)$",
+        statement,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        raise RuntimeError(f"Unsupported schema for legacy table {table!r}.")
+
+    target.execute(
+        f"{match.group('prefix')}main.{_quote(table)}{match.group('rest')}"
+    )
+
+
+def _verify_rows_copied(target: sqlite3.Connection, table: str) -> None:
+    source_columns = _columns(target, table, "legacy")
+    destination_columns = _columns(target, table, "main")
+    missing = [column for column in source_columns if column not in destination_columns]
+    if missing:
+        raise RuntimeError(
+            f"Cannot safely migrate {table!r}; destination is missing columns: {missing}."
+        )
+
+    compare_columns = [column for column in source_columns if column != "id"]
+    if not compare_columns:
+        return
+
+    selected = ", ".join(_quote(column) for column in compare_columns)
+    predicates = " AND ".join(
+        f"current.{_quote(column)} IS ?" for column in compare_columns
+    )
+    source_rows = target.execute(
+        f"SELECT {selected} FROM legacy.{_quote(table)}"
+    ).fetchall()
+    for row in source_rows:
+        copied = target.execute(
+            f"SELECT 1 FROM main.{_quote(table)} AS current "
+            f"WHERE {predicates} LIMIT 1",
+            tuple(row),
+        ).fetchone()
+        if copied is None:
+            raise RuntimeError(f"Could not confirm migration of a row from {table!r}.")
+
+
 def _merge_entries(target: sqlite3.Connection, source_table: str = "entries") -> None:
     destination_columns = _columns(target, source_table, "main")
     source_columns = _columns(target, source_table, "legacy")
+    missing = [column for column in source_columns if column not in destination_columns]
+    if missing:
+        raise RuntimeError(
+            f"Cannot safely migrate {source_table!r}; destination is missing columns: {missing}."
+        )
     columns = [column for column in source_columns if column in destination_columns and column != "id"]
     if not columns:
-        return
+        raise RuntimeError(f"Legacy table {source_table!r} has no migratable columns.")
 
     quoted_columns = ", ".join(_quote(column) for column in columns)
     matches = " AND ".join(
@@ -60,12 +121,16 @@ def _merge_entries(target: sqlite3.Connection, source_table: str = "entries") ->
 
 def _merge_jobs(target: sqlite3.Connection) -> None:
     table = "dictation_jobs"
-    if table not in _table_names(target, "main") or table not in _table_names(target, "legacy"):
-        return
-
     destination_columns = _columns(target, table, "main")
     source_columns = _columns(target, table, "legacy")
-    columns = [column for column in source_columns if column in destination_columns]
+    missing = [column for column in source_columns if column not in destination_columns]
+    if missing:
+        raise RuntimeError(
+            f"Cannot safely migrate {table!r}; destination is missing columns: {missing}."
+        )
+    columns = list(source_columns)
+    if not columns:
+        raise RuntimeError(f"Legacy table {table!r} has no migratable columns.")
     quoted_columns = ", ".join(_quote(column) for column in columns)
     target.execute(
         f"INSERT OR IGNORE INTO main.{_quote(table)} ({quoted_columns}) "
@@ -73,17 +138,32 @@ def _merge_jobs(target: sqlite3.Connection) -> None:
     )
 
 
-def _merge_databases(legacy_path: Path, destination_path: Path) -> None:
-    """Merge legacy rows without overwriting the project database."""
+def _merge_databases(legacy_path: Path, destination_path: Path) -> bool:
+    """Merge legacy rows and confirm every supported table was copied."""
     with sqlite3.connect(str(destination_path)) as target:
         target.execute("ATTACH DATABASE ? AS legacy", (str(legacy_path),))
         try:
             tables = _table_names(target, "legacy")
-            if "entries" in tables and "entries" in _table_names(target, "main"):
+            unsupported = tables - set(_SUPPORTED_DATABASE_TABLES) - {"sqlite_sequence"}
+            if unsupported:
+                raise RuntimeError(
+                    f"Legacy database contains unsupported tables: {sorted(unsupported)}."
+                )
+
+            supported = [table for table in _SUPPORTED_DATABASE_TABLES if table in tables]
+            destination_tables = _table_names(target, "main")
+            for table in supported:
+                if table not in destination_tables:
+                    _create_table_from_legacy(target, table)
+
+            if "entries" in supported:
                 _merge_entries(target)
-            if "dictation_jobs" in tables:
+            if "dictation_jobs" in supported:
                 _merge_jobs(target)
+            for table in supported:
+                _verify_rows_copied(target, table)
             target.commit()
+            return True
         except Exception:
             target.rollback()
             raise
@@ -126,9 +206,9 @@ def migrate_legacy_data() -> list[str]:
     legacy_db = LEGACY_DATA_DIR / "history.db"
     if legacy_db.exists():
         if HISTORY_DB_PATH.exists():
-            _merge_databases(legacy_db, HISTORY_DB_PATH)
-            legacy_db.unlink()
-            actions.append(f"merged {legacy_db} into {HISTORY_DB_PATH}")
+            if _merge_databases(legacy_db, HISTORY_DB_PATH):
+                legacy_db.unlink()
+                actions.append(f"merged {legacy_db} into {HISTORY_DB_PATH}")
         else:
             shutil.move(str(legacy_db), str(HISTORY_DB_PATH))
             actions.append(f"moved {legacy_db} to {HISTORY_DB_PATH}")

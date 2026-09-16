@@ -122,6 +122,18 @@ def _update_hotkey(key_name: str) -> bool:
     return True
 
 
+def _apply_runtime_settings(settings: dict[str, str]) -> None:
+    """Apply dashboard settings to the config consumed by future pipeline runs."""
+    if "cleanup_level" in settings:
+        _config.setdefault("llm", {})["cleanup_level"] = settings["cleanup_level"]
+    if "ollama_model" in settings:
+        _config.setdefault("llm", {})["ollama_model"] = settings["ollama_model"]
+    if "asr_engine" in settings:
+        # The active ASR model is constructed at startup. Persist this value and
+        # expose it in state, but require a restart before rebuilding the model.
+        _config.setdefault("asr", {})["engine"] = settings["asr_engine"]
+
+
 # ──────────────────────────────────────────────────────────────────── #
 #  Pipeline                                                             #
 # ──────────────────────────────────────────────────────────────────── #
@@ -398,6 +410,7 @@ def main():
     _hotkey_target = _resolve_hotkey(key_name)
     print(f"[main] Hotkey target resolved to: {repr(_hotkey_target)}")
     _api.register_hotkey_updater(_update_hotkey)
+    _api.register_runtime_config_updater(_apply_runtime_settings)
 
     # ── Start keyboard listener in background thread ───────────────────
     kb_thread = _start_listener()

@@ -657,6 +657,8 @@ async function loadHome() {
     renderFeed(entries, document.getElementById('home-feed'), 30);
     // Sync level card
     setActiveLevel(status.cleanup_level || 'light');
+    document.getElementById('sel-engine').value = status.asr_engine || 'auto';
+    document.getElementById('sel-model').value = status.ollama_model || 'llama3.2:3b';
   } catch(e) {
     console.error('Home load failed', e);
   }
@@ -839,10 +841,11 @@ document.querySelectorAll('.level-card').forEach(card => {
     const level = card.dataset.level;
     setActiveLevel(level);
     try {
-      await fetch(API+'/settings', {
+      const response = await fetch(API+'/settings', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({cleanup_level: level}),
       });
+      if (!response.ok) throw new Error((await response.json()).error || 'Could not save cleanup level.');
     } catch(e) { console.error('Failed to save level', e); }
   });
 });
@@ -895,11 +898,17 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
     ollama_model: document.getElementById('sel-model').value,
   };
   try {
-    await fetch(API+'/settings', {
+    const response = await fetch(API+'/settings', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload),
     });
-    document.getElementById('btn-save-settings').textContent = '✓ Saved';
+    if (!response.ok) throw new Error((await response.json()).error || 'Could not save settings.');
+    const result = await response.json();
+    document.getElementById('sel-engine').value = result.state?.asr_engine || payload.asr_engine;
+    document.getElementById('sel-model').value = result.state?.ollama_model || payload.ollama_model;
+    document.getElementById('btn-save-settings').textContent = result.restart_required?.length
+      ? '✓ Saved — restart Hush'
+      : '✓ Saved';
     setTimeout(() => { document.getElementById('btn-save-settings').textContent = 'Save settings'; }, 2000);
   } catch(e) { alert('Could not save: ' + e.message); }
 });

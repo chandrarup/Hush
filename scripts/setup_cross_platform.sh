@@ -83,6 +83,11 @@ if [[ "$OS" == "Darwin" ]]; then
 fi
 "$UV_BIN" sync "${SYNC_ARGS[@]}"
 
+# Migrate legacy home-directory data before creating project-local defaults.
+echo ""
+echo ">>> Migrating legacy application data..."
+"$UV_BIN" run --project "$REPO_DIR" --no-dev python -c 'from voiceflow.config.migration import migrate_legacy_data; [print(f"  {action}") for action in migrate_legacy_data()]'
+
 # ── Config directory & files ──────────────────────────────────────────────── #
 echo ""
 echo ">>> Setting up project data configuration..."
