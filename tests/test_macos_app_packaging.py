@@ -390,6 +390,10 @@ def test_tagged_release_workflow_uses_ephemeral_secrets_and_publishes_dmg():
     assert '- "v*"' in workflow
     assert 'MACOS_CERTIFICATE_BASE64' in workflow
     assert 'APPLE_NOTARY_KEY_BASE64' in workflow
+    assert 'vars.MACOS_SKIP_SIGNING' in workflow
+    assert "id: signing_mode" in workflow
+    assert "steps.signing_mode.outputs.signing_enabled == 'true'" in workflow
+    assert "steps.signing_mode.outputs.signing_enabled != 'true'" in workflow
     assert 'permissions:\n  contents: read' in workflow
     assert 'persist-credentials: false' in workflow
     assert 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262' in workflow
@@ -401,6 +405,8 @@ def test_tagged_release_workflow_uses_ephemeral_secrets_and_publishes_dmg():
     assert 'contents: write' in workflow
     assert 'notarytool store-credentials' in workflow
     assert 'bash packaging/sign_and_notarize.sh dist/Hush.app' in workflow
+    assert 'bash packaging/build_dmg.sh dist/Hush.app' in workflow
+    assert 'name: hush-release-dmg' in workflow
     assert 'gh release create' in workflow
     assert 'Developer ID Application:' not in workflow
     assert 'BEGIN PRIVATE KEY' not in workflow
