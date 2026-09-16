@@ -15,7 +15,7 @@ reviews:
       (Docker llama.cpp, then Ollama, then rules_clean) → inject text → notify.
     - Dual modes: Dictate (transcribe + clean) and Commander (speak intent,
       compose a ready-to-send message).
-    - Supporting pieces: ~/.voiceflow config/vocab/history, loopback FastAPI
+    - Supporting pieces: project-local data/config, SQLite history, loopback FastAPI
       dashboard, tray icon, onboarding/permissions, install.sh / .command / DMG.
 
     Intended evolution (this IS the project goal — do not treat it as scope creep):

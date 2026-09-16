@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — One-command VoiceFlow installer
+# install.sh — One-command Hush installer
 # Usage: bash install.sh
 # Requires: macOS 12+, internet connection (first run)
 set -euo pipefail
@@ -76,7 +76,7 @@ if command -v ollama &>/dev/null; then
 fi
 
 # ── 5. Create config ──────────────────────────────────────────────── #
-CONFIG_DIR="$HOME/.voiceflow"
+CONFIG_DIR="$REPO_DIR/data"
 mkdir -p "$CONFIG_DIR"
 if [ ! -f "$CONFIG_DIR/config.toml" ]; then
   info "Writing default config..."
@@ -140,8 +140,8 @@ cat > "$LAUNCH_AGENT" << EOF
   <key>WorkingDirectory</key> <string>$REPO_DIR</string>
   <key>RunAtLoad</key>        <true/>
   <key>KeepAlive</key>        <false/>
-  <key>StandardOutPath</key>  <string>$HOME/.voiceflow/voiceflow.log</string>
-  <key>StandardErrorPath</key><string>$HOME/.voiceflow/voiceflow.log</string>
+  <key>StandardOutPath</key>  <string>$REPO_DIR/data/hush.log</string>
+  <key>StandardErrorPath</key><string>$REPO_DIR/data/hush.log</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>

@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  VoiceFlow Setup Script
+#  Hush Setup Script
 #  Supports: macOS (Homebrew) and Ubuntu/Debian Linux
 # =============================================================================
 set -e
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DATA_DIR="$REPO_DIR/data"
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║       VoiceFlow Setup                   ║"
+echo "║       Hush Setup                        ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
@@ -84,12 +85,12 @@ fi
 
 # ── Config directory & files ──────────────────────────────────────────────── #
 echo ""
-echo ">>> Setting up ~/.voiceflow configuration..."
+echo ">>> Setting up project data configuration..."
 
-mkdir -p ~/.voiceflow
+mkdir -p "$DATA_DIR"
 
-if [ ! -f ~/.voiceflow/config.toml ]; then
-    cat > ~/.voiceflow/config.toml << 'TOML'
+if [ ! -f "$DATA_DIR/config.toml" ]; then
+    cat > "$DATA_DIR/config.toml" << 'TOML'
 [hotkey]
 key = "ctrl_r"
 
@@ -112,15 +113,15 @@ method = "auto"
 show_notification = true
 notification_duration = 3
 TOML
-    echo "  Created ~/.voiceflow/config.toml"
+    echo "  Created $DATA_DIR/config.toml"
 else
     echo "  Config already exists — skipping."
 fi
 
 # Create empty vocab file
-if [ ! -f ~/.voiceflow/vocab.txt ]; then
-    touch ~/.voiceflow/vocab.txt
-    echo "  Created ~/.voiceflow/vocab.txt (empty — add custom words one per line)"
+if [ ! -f "$DATA_DIR/vocab.txt" ]; then
+    touch "$DATA_DIR/vocab.txt"
+    echo "  Created $DATA_DIR/vocab.txt (empty — add custom words one per line)"
 fi
 
 # ── Ollama setup ──────────────────────────────────────────────────────────── #
@@ -152,7 +153,7 @@ echo "╔═══════════════════════�
 echo "║  Setup complete!                        ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
-echo "  Run VoiceFlow:"
+echo "  Run Hush:"
 echo "    uv run --project \"$REPO_DIR\" --no-dev python -m voiceflow.app.main"
 echo ""
 echo "  Usage:"
@@ -161,6 +162,6 @@ echo "    • Release to transcribe and inject text"
 echo "    • Right-click the tray icon to Quit"
 echo ""
 echo "  Customize:"
-echo "    • ~/.voiceflow/config.toml  — hotkey, models, language"
-echo "    • ~/.voiceflow/vocab.txt    — personal vocabulary (one word/phrase per line)"
+echo "    • $DATA_DIR/config.toml  — hotkey, models, language"
+echo "    • $DATA_DIR/vocab.txt    — personal vocabulary (one word/phrase per line)"
 echo ""
