@@ -1,5 +1,8 @@
 """Load project-local configuration and vocabulary files."""
 
+import os
+import tempfile
+
 import toml
 
 from .defaults import DEFAULT_CONFIG
@@ -74,3 +77,28 @@ def load_vocab() -> list[str]:
     except Exception as e:
         print(f"[config] WARNING: Could not read vocab file ({e}).")
         return []
+
+
+def persist_cloud_client_id(client_id: str) -> None:
+    """Persist only the generated desktop identity without exposing the team token."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    config = toml.load(CONFIG_PATH) if CONFIG_PATH.exists() else {}
+    config.setdefault("cloud", {})["client_id"] = client_id
+    temporary_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=CONFIG_DIR,
+            prefix=f".{CONFIG_PATH.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary:
+            toml.dump(config, temporary)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path = temporary.name
+        os.replace(temporary_path, CONFIG_PATH)
+    finally:
+        if temporary_path and os.path.exists(temporary_path):
+            os.unlink(temporary_path)

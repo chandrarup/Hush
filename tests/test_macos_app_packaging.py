@@ -63,15 +63,15 @@ def test_packaged_reinstall_reopens_onboarding_without_erasing_user_data(monkeyp
     assert permissions.is_first_launch() is True
 
 
-def test_mac_app_onboarding_requires_only_microphone_and_accessibility():
+def test_mac_app_onboarding_requires_all_three_macos_permissions():
     permissions_source = (REPO / "voiceflow/platform/backends/macos/permissions.py").read_text()
     onboarding_source = (REPO / "voiceflow/web/ui/onboarding.html").read_text()
     release_guide = (REPO / "docs/MACOS_APP_RELEASE.md").read_text()
 
-    assert '"input_monitoring"' not in permissions_source
-    assert "Input Monitoring" not in onboarding_source
-    assert "p.microphone && p.accessibility" in onboarding_source
-    assert "Input Monitoring is not a required setup step" in release_guide
+    assert '"input_monitoring"' in permissions_source
+    assert "Input Monitoring" in onboarding_source
+    assert "p.microphone && p.input_monitoring && p.accessibility" in onboarding_source
+    assert "Input Monitoring identifies Hush" in release_guide
 
 
 def test_packaged_runtime_sets_model_cache_outside_the_bundle(monkeypatch, tmp_path):
@@ -85,11 +85,22 @@ def test_packaged_runtime_sets_model_cache_outside_the_bundle(monkeypatch, tmp_p
     assert (tmp_path / "Hush" / "Models").is_dir()
 
 
-def test_model_stack_is_imported_after_runtime_configuration():
+def test_packaged_desktop_uses_cloud_client_without_local_model_stack():
+    main_source = (REPO / "voiceflow/app/main.py").read_text()
+    packaging_source = (REPO / "packaging/setup_app.py").read_text()
+
+    assert "configure_runtime_environment()" in main_source
+    assert "CloudTranscriptionSession" in main_source
+    assert "from ..core.transcriber import create_transcriber" not in main_source
+    assert "'websockets'" in packaging_source
+
+
+def test_hotkey_listener_waits_before_reporting_macos_trust():
     main_source = (REPO / "voiceflow/app/main.py").read_text()
 
-    assert main_source.index("configure_runtime_environment()") < main_source.index(
-        "from ..core.transcriber import create_transcriber"
+    assert main_source.index("lst.start()") < main_source.index("lst.wait()")
+    assert main_source.index("lst.wait()") < main_source.index(
+        "trusted = getattr(lst, 'IS_TRUSTED', None)"
     )
 
 
@@ -205,6 +216,18 @@ def test_input_monitoring_uses_the_hid_registration_api(monkeypatch):
     assert tcc.is_input_monitoring_trusted() is True
     assert tcc.request_input_monitoring() is False
     assert requests == [("check", 1), ("request", 1)]
+
+
+def test_input_monitoring_permission_opens_settings_when_not_yet_granted(monkeypatch):
+    permissions = macos_permissions.MacOSPermissions()
+    opened = []
+    monkeypatch.setattr(macos_permissions, "is_input_monitoring_trusted", lambda: False)
+    monkeypatch.setattr(macos_permissions, "request_input_monitoring", lambda: False)
+    monkeypatch.setattr(permissions, "open_system_settings", lambda kind: opened.append(kind) or True)
+
+    assert permissions.request_permission("input_monitoring") is False
+    assert permissions.last_permission_request_opened_settings is True
+    assert opened == ["input_monitoring"]
 
 
 def test_menu_bar_mark_is_a_static_waveform_not_a_status_dot():

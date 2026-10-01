@@ -124,11 +124,7 @@ def request_microphone() -> bool:
 
 
 def is_input_monitoring_trusted() -> bool:
-    """Return a best-effort legacy Input Monitoring decision without prompting.
-
-    Hush does not use this for normal onboarding: Accessibility grants both
-    event listening and event posting for its global hotkey and text injection.
-    """
+    """Return whether macOS permits Hush to observe the global hotkey."""
     try:
         check_access = _hid_access_function("IOHIDCheckAccess", ctypes.c_uint32)
 

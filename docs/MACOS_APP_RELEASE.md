@@ -71,18 +71,19 @@ never in this repository or a release script.
 2. Open the DMG and drag **Hush** to **Applications**.
 3. Eject the DMG, then open **Hush** from Applications.
 4. Select **Allow** when Hush requests microphone access.
-5. Select **Enable** for typing. In the macOS alert, choose **Open System
+5. Select **Enable** for the global hotkey and turn on **Hush** under Input
+   Monitoring. If it is absent, use **+** to select `/Applications/Hush.app`.
+6. Select **Enable** for typing. In the macOS alert, choose **Open System
    Settings** and turn on **Hush** under Accessibility.
-6. Return to the existing browser setup page. It refreshes and enables
-   **Continue** when both permissions are available. If macOS asks to quit and
+7. Return to the existing browser setup page. It refreshes and enables
+   **Continue** when all three permissions are available. If macOS asks to quit and
    reopen Hush, leave that page open; it reconnects when Hush starts again.
-7. Wait for the initial speech-model download, then run the dictation test.
+8. Run the cloud dictation test.
 
-Input Monitoring is not a required setup step for the free Hush build. macOS
-does not reliably list an unsigned app in that pane, and Accessibility covers
-Hush's event-listening and text-insertion path. If the hotkey works after
-Accessibility is enabled, setup is complete. Do not use the `+` button to add
-Terminal, Python, a virtual environment, or a Python framework path.
+Input Monitoring is required for the global push-to-talk hotkey, while
+Accessibility is required to insert the final text into another application.
+For the installed app, add Hush itself rather than Terminal, Python, a virtual
+environment, or a Python framework path.
 
 ## Required Clean-Mac Checks
 
@@ -90,7 +91,7 @@ Terminal, Python, a virtual environment, or a Python framework path.
 - Hush launches directly from Applications after the DMG is ejected.
 - The microphone dialog identifies Hush.
 - Accessibility identifies Hush and the setup page refreshes after it is enabled.
-- Input Monitoring is not required to complete setup or to use the hotkey.
+- Input Monitoring identifies Hush and the setup page refreshes after it is enabled.
 - A denied permission produces a recovery state, never a false success.
 - Hold-to-talk, recording, transcription, and text insertion work in TextEdit.
 - Updating Hush preserves the same bundle identifier and signing identity.

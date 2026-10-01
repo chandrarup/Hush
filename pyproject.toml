@@ -1,10 +1,10 @@
 [project]
 name = "voiceflow-app"
 version = "1.0.0"
-description = "Local push-to-talk speech-to-text desktop application"
+description = "Push-to-talk desktop client with a self-hosted cloud transcription server"
 requires-python = ">=3.10"
 dependencies = [
-    # ASR fallback and audio pipeline
+    # VM ASR service and desktop audio capture
     "faster-whisper>=1.0.0",
     "sounddevice>=0.4.6",
     "numpy>=1.24.0",
@@ -15,7 +15,7 @@ dependencies = [
     "pyperclip>=1.8.2",
     "pyautogui>=0.9.54",
 
-    # Local LLM providers and configuration
+    # VM cleanup providers and shared configuration
     "ollama>=0.2.0",
     "requests>=2.31.0",
     "toml>=0.10.2",
@@ -27,6 +27,7 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.29.0",
     "aiofiles>=23.2.1",
+    "websockets>=12.0,<16.0",
 
     # Native macOS text injection; ignored on other operating systems.
     "pyobjc-framework-AVFoundation>=10.0; sys_platform == 'darwin'",

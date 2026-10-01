@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from .backends.common.tray import TrayIcon
+from typing import TYPE_CHECKING
+
 from .backends.generic.context import GenericContext
 from .backends.generic.notifications import GenericNotifications
 from .backends.generic.permissions import GenericPermissions
@@ -22,6 +23,9 @@ from .backends.windows.permissions import WindowsPermissions
 from .backends.windows.text_injection import WindowsTextInjector
 from .contracts import PlatformServices
 
+if TYPE_CHECKING:
+    from .backends.common.tray import TrayIcon
+
 
 class _TrayService:
     def __init__(self, tray: TrayIcon) -> None:
@@ -32,6 +36,10 @@ class _TrayService:
 
 
 def _tray_for(permissions, activity_hud=None) -> _TrayService:
+    # Importing pystray connects to X11 on Linux, so defer it until the desktop
+    # application actually asks for a tray instead of during web API startup.
+    from .backends.common.tray import TrayIcon
+
     return _TrayService(
         TrayIcon(
             open_settings=lambda: permissions.open_system_settings("accessibility"),

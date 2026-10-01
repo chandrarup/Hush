@@ -7,9 +7,11 @@ import subprocess
 from ..common.permissions import DesktopPermissions
 from .text_injection import check_accessibility_permission
 from .tcc import (
+    is_input_monitoring_trusted,
     is_microphone_authorized,
     microphone_authorization_status,
     request_accessibility,
+    request_input_monitoring,
     request_microphone,
 )
 
@@ -20,6 +22,7 @@ class MacOSPermissions(DesktopPermissions):
             """
 macOS permissions:
   Hush requests permissions during onboarding.
+  Input Monitoring: System Settings -> Privacy & Security -> Input Monitoring
   Accessibility: System Settings -> Privacy & Security -> Accessibility
             """.strip()
         )
@@ -36,6 +39,7 @@ macOS permissions:
     def get_all_permissions(self) -> dict:
         return {
             "microphone": is_microphone_authorized(),
+            "input_monitoring": is_input_monitoring_trusted(),
             "accessibility": self.check_accessibility_permission(),
         }
 
@@ -48,11 +52,21 @@ macOS permissions:
             return request_microphone()
         if permission_type == "accessibility":
             return request_accessibility()
+        if permission_type == "input_monitoring":
+            if is_input_monitoring_trusted():
+                return True
+            if request_input_monitoring():
+                return True
+            self._last_permission_request_opened_settings = self.open_system_settings(
+                "input_monitoring"
+            )
+            return False
         return False
 
     def open_system_settings(self, permission_type: str) -> bool:
         urls = {
             "microphone": "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+            "input_monitoring": "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent",
             "accessibility": "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
         }
         url = urls.get(permission_type)

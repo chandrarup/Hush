@@ -18,6 +18,8 @@ def _conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(str(DB_PATH))
     c.row_factory = sqlite3.Row
+    c.execute("PRAGMA journal_mode=WAL")
+    c.execute("PRAGMA busy_timeout=5000")
     return c
 
 
@@ -31,21 +33,39 @@ def init_db():
                 clean    TEXT    NOT NULL,
                 level    TEXT    NOT NULL DEFAULT 'light',
                 app      TEXT,
+                client_id TEXT,
+                status   TEXT    NOT NULL DEFAULT 'final',
                 words    INTEGER NOT NULL DEFAULT 0
             )
         """)
+        columns = {row[1] for row in c.execute("PRAGMA table_info(entries)")}
+        if "client_id" not in columns:
+            c.execute("ALTER TABLE entries ADD COLUMN client_id TEXT")
+        if "status" not in columns:
+            c.execute(
+                "ALTER TABLE entries ADD COLUMN status TEXT NOT NULL DEFAULT 'final'"
+            )
         c.commit()
     print("[history] DB ready at", DB_PATH)
 
 
-def save_entry(raw: str, clean: str, level: str = "light", app: str | None = None) -> int:
+def save_entry(
+    raw: str,
+    clean: str,
+    level: str = "light",
+    app: str | None = None,
+    client_id: str | None = None,
+    status: str = "final",
+) -> int:
     """Save a transcription entry. Returns the new row id."""
     words = len(clean.split())
     ts    = datetime.now().isoformat(timespec="seconds")
     with _conn() as c:
         cur = c.execute(
-            "INSERT INTO entries (ts, raw, clean, level, app, words) VALUES (?,?,?,?,?,?)",
-            (ts, raw, clean, level, app, words),
+            "INSERT INTO entries "
+            "(ts, raw, clean, level, app, client_id, status, words) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (ts, raw, clean, level, app, client_id, status, words),
         )
         c.commit()
         return cur.lastrowid

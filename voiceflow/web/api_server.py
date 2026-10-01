@@ -1,29 +1,40 @@
-"""
-api_server.py — Local FastAPI server for the Hush dashboard.
+"""FastAPI dashboard and cloud transcription service for Hush.
 
-Runs on http://localhost:57327 (loopback only).
+The desktop starts this app in UI-only mode on loopback. The VM runs it as the
+cloud service, where it owns transcription, cleanup, snippets, and history.
+
 Serves:
   GET  /              → dashboard HTML
   GET  /history       → transcription entries (JSON)
   GET  /stats         → word count, wpm, days
   GET  /status        → app state (recording/idle, cleanup level, etc.)
+  POST /transcribe    → transcribe a browser-uploaded WAV file
   POST /settings      → update cleanup level, hotkey display name
   DELETE /history     → clear all history
   DELETE /history/{id}→ delete one entry
   GET  /events        → Server-Sent Events stream for live updates
+  WS   /ws/transcribe → live desktop audio and transcript events
 """
 
 import asyncio
+import hmac
+import io
 import json
 import os
 import pathlib
 import sys
 import tempfile
 import threading
+import time
+import uuid
+import wave
 from typing import Any, Callable
+from urllib.parse import urlsplit
+
+import numpy as np
 
 try:
-    from fastapi import FastAPI, Request
+    from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
     from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
     from fastapi.staticfiles import StaticFiles
     import uvicorn
@@ -32,10 +43,15 @@ except ImportError:
     _FASTAPI_OK = False
 
 from ..core import history as _history
+from ..core.cleaner import clean_transcript
+from ..config import load_config
 from ..config.snippets import (
     SNIPPETS_PATH,
     add_snippet,
+    expand_snippets,
     get_snippets_snapshot,
+    is_exact_shortcut,
+    load_snippets,
     remove_snippet,
     SnippetConflictError,
     update_snippet,
@@ -48,8 +64,9 @@ _state: dict[str, Any] = {
     "status":        "idle",       # idle | recording | processing
     "cleanup_level": "light",      # none | light | medium | high
     "hotkey":        "ctrl_l",
-    "asr_engine":    "auto",
+    "asr_engine":    "whisper",
     "ollama_model":  "llama3.2:3b",
+    "web_model":     "base.en",
 }
 
 def update_state(**kwargs):
@@ -67,6 +84,199 @@ _onboarding_reconnect_event = threading.Event()
 
 _VALID_CLEANUP_LEVELS = {"none", "light", "medium", "high"}
 _VALID_ASR_ENGINES = {"auto", "parakeet", "whisper"}
+_WEB_AUDIO_SAMPLE_RATE = 16_000
+_WEB_AUDIO_MAX_BYTES = 10 * 1024 * 1024
+_WEB_AUDIO_MAX_SECONDS = 60
+_web_transcriber: Any | None = None
+_web_transcriber_init_lock = threading.Lock()
+_web_transcribe_lock = threading.Lock()
+_web_status_lock = threading.Lock()
+_web_active_transcriptions = 0
+_history_enabled = True
+_active_cloud_sessions: dict[str, dict[str, Any]] = {}
+_cloud_sessions_lock = threading.Lock()
+_CLOUD_PARTIAL_INTERVAL_SECONDS = 1.5
+_CLOUD_MIN_PARTIAL_SECONDS = 0.75
+_CLOUD_MAX_AUDIO_BYTES = _WEB_AUDIO_SAMPLE_RATE * _WEB_AUDIO_MAX_SECONDS * 4
+_CLOUD_MAX_CHUNK_BYTES = 256 * 1024
+
+
+class WebAudioError(ValueError):
+    """Raised when a browser upload is not a supported PCM WAV file."""
+
+
+def _decode_web_wav(payload: bytes) -> np.ndarray:
+    """Decode a mono, 16 kHz, 16-bit PCM WAV upload into float32 audio."""
+    if not payload:
+        raise WebAudioError("Choose a non-empty audio file.")
+    if len(payload) > _WEB_AUDIO_MAX_BYTES:
+        raise WebAudioError("Audio file exceeds the 10 MB limit.")
+
+    try:
+        with wave.open(io.BytesIO(payload), "rb") as wav_file:
+            channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            sample_rate = wav_file.getframerate()
+            frame_count = wav_file.getnframes()
+            compression = wav_file.getcomptype()
+            if compression != "NONE":
+                raise WebAudioError("Audio must use uncompressed PCM WAV encoding.")
+            if channels != 1 or sample_width != 2 or sample_rate != _WEB_AUDIO_SAMPLE_RATE:
+                raise WebAudioError("Audio must be mono 16-bit PCM WAV at 16 kHz.")
+            if frame_count > _WEB_AUDIO_SAMPLE_RATE * _WEB_AUDIO_MAX_SECONDS:
+                raise WebAudioError("Audio must be 60 seconds or shorter.")
+            pcm_bytes = wav_file.readframes(frame_count)
+    except (EOFError, wave.Error) as exc:
+        raise WebAudioError("Audio could not be read as a WAV file.") from exc
+
+    audio = np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32) / 32768.0
+    if audio.size == 0:
+        raise WebAudioError("Choose a non-empty audio file.")
+    return audio
+
+
+async def _read_web_audio(request: Any) -> bytes:
+    """Read an upload incrementally and stop as soon as it exceeds the limit."""
+    chunks: list[bytes] = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        total_bytes += len(chunk)
+        if total_bytes > _WEB_AUDIO_MAX_BYTES:
+            raise WebAudioError("Audio file exceeds the 10 MB limit.")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _get_web_transcriber():
+    """Load the small English Whisper model once, on the first web request."""
+    global _web_transcriber
+    if _web_transcriber is None:
+        with _web_transcriber_init_lock:
+            if _web_transcriber is None:
+                from ..core.transcriber import create_transcriber
+
+                _web_transcriber = create_transcriber(
+                    engine="whisper",
+                    model="base.en",
+                    language="en",
+                    compute_type_cpu="int8",
+                )
+    return _web_transcriber
+
+
+def _transcribe_web_audio(audio: np.ndarray) -> str:
+    """Trim silence and serialize model access for predictable CPU usage."""
+    from ..core.vad import trim_silence
+
+    trimmed = trim_silence(audio, sample_rate=_WEB_AUDIO_SAMPLE_RATE)
+    with _web_transcribe_lock:
+        return _get_web_transcriber().transcribe(trimmed).strip()
+
+
+def _allowed_web_hosts() -> set[str]:
+    """Return hostnames permitted to serve the browser dashboard and API."""
+    configured = {
+        host.strip().lower()
+        for host in os.getenv("HUSH_ALLOWED_HOSTS", "").split(",")
+        if host.strip()
+    }
+    return {"127.0.0.1", "localhost", "::1", *configured}
+
+
+def _team_token() -> str:
+    """Return the VM's shared team token without supplying an unsafe default."""
+    return os.getenv("HUSH_TEAM_TOKEN", "").strip()
+
+
+def _token_matches(provided: str | None) -> bool:
+    expected = _team_token()
+    return bool(expected and provided and hmac.compare_digest(provided, expected))
+
+
+def _request_token(request: Any) -> str | None:
+    authorization = request.headers.get("authorization", "")
+    if authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return None
+
+
+def _mutation_token_is_valid(request: Any) -> bool:
+    """Require the configured token on mutations; loopback dev stays token-free."""
+    return not _team_token() or _token_matches(_request_token(request))
+
+
+def _request_origin_is_trusted(request: Any) -> bool:
+    """Require an allowed host and a matching same-origin browser request."""
+    request_host = urlsplit(f"//{request.headers.get('host', '')}").hostname
+    if not request_host or request_host.lower() not in _allowed_web_hosts():
+        return False
+
+    origin = request.headers.get("origin")
+    if not origin:
+        return False
+    parsed_origin = urlsplit(origin)
+    return (
+        parsed_origin.scheme in {"http", "https"}
+        and parsed_origin.netloc.lower() == request.headers.get("host", "").lower()
+        and (parsed_origin.hostname or "").lower() in _allowed_web_hosts()
+    )
+
+
+def _change_web_transcription_count(delta: int) -> None:
+    """Keep shared status accurate while browser transcriptions overlap."""
+    global _web_active_transcriptions
+    with _web_status_lock:
+        _web_active_transcriptions = max(0, _web_active_transcriptions + delta)
+        status = "processing" if _web_active_transcriptions else "idle"
+    update_state(status=status)
+    push_event({"type": "status", "value": status})
+
+
+def _cloud_sessions_snapshot() -> list[dict[str, Any]]:
+    with _cloud_sessions_lock:
+        return [dict(session) for session in _active_cloud_sessions.values()]
+
+
+def _set_cloud_session(session_id: str, **values: Any) -> None:
+    with _cloud_sessions_lock:
+        session = _active_cloud_sessions.setdefault(session_id, {"session_id": session_id})
+        session.update(values)
+        event = dict(session)
+    push_event({"type": "live_session", "session": event})
+
+
+def _remove_cloud_session(session_id: str) -> None:
+    with _cloud_sessions_lock:
+        _active_cloud_sessions.pop(session_id, None)
+
+
+def _clean_cloud_transcript(raw_text: str, cleanup_level: str, app_name: str | None) -> str:
+    """Run snippet expansion and cleanup using configuration stored on the VM."""
+    snippets = load_snippets()
+    if is_exact_shortcut(raw_text, snippets):
+        return expand_snippets(raw_text, snippets)
+
+    config = load_config()
+    llm_cfg = config.get("llm", {})
+    level = cleanup_level if cleanup_level in _VALID_CLEANUP_LEVELS else llm_cfg.get(
+        "cleanup_level", "light"
+    )
+    return clean_transcript(
+        raw_text,
+        level=level,
+        docker_llm_url=llm_cfg.get(
+            "docker_llm_url", "http://localhost:12434/engines/llama.cpp/v1"
+        ),
+        docker_llm_model=llm_cfg.get("docker_llm_model", ""),
+        ollama_model=llm_cfg.get("ollama_model", "llama3.2:3b"),
+        ollama_base_url=os.getenv(
+            "HUSH_OLLAMA_BASE_URL",
+            llm_cfg.get("ollama_base_url", "http://localhost:11434"),
+        ),
+        temperature=llm_cfg.get("temperature", 0.1),
+        max_tokens=llm_cfg.get("max_tokens", 500),
+        app_context=app_name,
+    ).strip()
 
 
 def register_hotkey_updater(updater: Callable[[str], bool]) -> None:
@@ -97,7 +307,7 @@ def push_event(event: dict):
     Thread-safe — called from the pipeline thread.
     """
     global _event_loop
-    if _event_loop is None:
+    if _event_loop is None or _event_loop.is_closed():
         return
 
     def _do_push():
@@ -122,18 +332,23 @@ if _FASTAPI_OK:
 
     @app.middleware("http")
     async def _require_same_origin_for_mutations(request: Request, call_next):
-        """Reject browser mutations that did not originate from this dashboard."""
+        """Reject untrusted hosts, cross-origin writes, and bad team tokens."""
+        request_host = urlsplit(f"//{request.headers.get('host', '')}").hostname
+        if not request_host or request_host.lower() not in _allowed_web_hosts():
+            return JSONResponse({"error": "Untrusted host."}, status_code=403)
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-            expected_origin = str(request.base_url).rstrip("/")
-            if request.headers.get("origin") != expected_origin:
+            if not _request_origin_is_trusted(request):
                 return JSONResponse({"error": "Cross-origin request rejected."}, status_code=403)
+            if not _mutation_token_is_valid(request):
+                return JSONResponse({"error": "Invalid or missing team token."}, status_code=401)
         return await call_next(request)
 
     @app.on_event("startup")
     async def _startup():
         global _event_loop
         _event_loop = asyncio.get_running_loop()
-        _history.init_db()
+        if _history_enabled:
+            _history.init_db()
         print("[api] Server ready at http://localhost:57327")
 
     # ── Dashboard HTML ──────────────────────────────────────────── #
@@ -147,8 +362,13 @@ if _FASTAPI_OK:
 
     @app.get("/ui/{path:path}")
     async def static_files(path: str):
-        file_path = _UI_DIR / path
-        if file_path.exists():
+        ui_root = _UI_DIR.resolve()
+        file_path = (ui_root / path).resolve()
+        try:
+            file_path.relative_to(ui_root)
+        except ValueError:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        if file_path.is_file():
             return FileResponse(str(file_path))
         return JSONResponse({"error": "Not found"}, status_code=404)
 
@@ -156,15 +376,73 @@ if _FASTAPI_OK:
 
     @app.get("/history")
     async def get_history(limit: int = 200, offset: int = 0):
+        if not _history_enabled:
+            return []
         return _history.get_entries(limit=limit, offset=offset)
 
     @app.get("/stats")
     async def get_stats():
+        if not _history_enabled:
+            return {"total_words": 0, "avg_wpm": 0, "active_days": 0}
         return _history.get_stats()
 
     @app.get("/status")
     async def get_status():
-        return dict(_state)
+        return {**_state, "live_sessions": _cloud_sessions_snapshot()}
+
+    @app.post("/transcribe")
+    async def post_transcribe(request: Request):
+        if not _history_enabled:
+            return JSONResponse(
+                {"error": "Diagnostic upload is available on the cloud dashboard only."},
+                status_code=409,
+            )
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > _WEB_AUDIO_MAX_BYTES:
+                    return JSONResponse(
+                        {"error": "Audio file exceeds the 10 MB limit."},
+                        status_code=413,
+                    )
+            except ValueError:
+                return JSONResponse({"error": "Invalid Content-Length header."}, status_code=400)
+
+        try:
+            payload = await _read_web_audio(request)
+            audio = _decode_web_wav(payload)
+        except WebAudioError as exc:
+            status_code = 413 if "10 MB limit" in str(exc) else 400
+            return JSONResponse({"error": str(exc)}, status_code=status_code)
+
+        _change_web_transcription_count(1)
+        try:
+            text = await asyncio.to_thread(_transcribe_web_audio, audio)
+            history_id = None
+            if text:
+                history_id = _history.save_entry(
+                    raw=text,
+                    clean=text,
+                    level="none",
+                    app="Web upload",
+                    client_id="web-upload",
+                    status="final",
+                )
+                entry = _history.get_entry(history_id)
+                if entry:
+                    push_event({"type": "new_entry", "entry": entry})
+            return {"text": text, "history_id": history_id}
+        except RuntimeError as exc:
+            print(f"[api] Web transcriber unavailable: {exc}")
+            return JSONResponse(
+                {"error": "The transcription model could not be loaded."},
+                status_code=503,
+            )
+        except Exception as exc:
+            print(f"[api] Browser transcription failed: {exc}")
+            return JSONResponse({"error": "Transcription failed."}, status_code=500)
+        finally:
+            _change_web_transcription_count(-1)
 
     @app.post("/settings")
     async def post_settings(request: Request):
@@ -208,6 +486,8 @@ if _FASTAPI_OK:
 
     @app.get("/snippets")
     async def get_snippets():
+        if not _history_enabled:
+            return {"path": "cloud", "snippets": [], "version": ""}
         snippets, version = get_snippets_snapshot()
         return {
             "path": str(SNIPPETS_PATH),
@@ -220,6 +500,10 @@ if _FASTAPI_OK:
 
     @app.post("/snippets")
     async def post_snippet(request: Request):
+        if not _history_enabled:
+            return JSONResponse(
+                {"error": "Manage snippets from the cloud dashboard."}, status_code=409
+            )
         try:
             data = await request.json()
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -238,6 +522,10 @@ if _FASTAPI_OK:
 
     @app.put("/snippets/{snippet_index}")
     async def put_snippet(snippet_index: int, request: Request):
+        if not _history_enabled:
+            return JSONResponse(
+                {"error": "Manage snippets from the cloud dashboard."}, status_code=409
+            )
         try:
             data = await request.json()
         except (json.JSONDecodeError, UnicodeDecodeError):
@@ -259,6 +547,10 @@ if _FASTAPI_OK:
 
     @app.delete("/snippets/{snippet_index}")
     async def delete_snippet(snippet_index: int, version: str | None = None):
+        if not _history_enabled:
+            return JSONResponse(
+                {"error": "Manage snippets from the cloud dashboard."}, status_code=409
+            )
         if not version:
             return JSONResponse(
                 {"error": "A snippet list version is required."},
@@ -273,13 +565,216 @@ if _FASTAPI_OK:
 
     @app.delete("/history")
     async def clear_history():
+        if not _history_enabled:
+            return JSONResponse({"error": "History is stored in Hush Cloud."}, status_code=409)
         _history.clear_all()
         return {"ok": True}
 
     @app.delete("/history/{entry_id}")
     async def delete_entry(entry_id: int):
+        if not _history_enabled:
+            return JSONResponse({"error": "History is stored in Hush Cloud."}, status_code=409)
         _history.delete_entry(entry_id)
         return {"ok": True}
+
+    # ── Live cloud transcription ─────────────────────────────────── #
+
+    @app.websocket("/ws/transcribe")
+    async def websocket_transcribe(websocket: WebSocket):
+        if not _history_enabled:
+            await websocket.close(code=1008, reason="Cloud transcription is disabled locally.")
+            return
+        configured_token = _team_token()
+        provided_token = _request_token(websocket)
+        if not configured_token:
+            await websocket.close(code=1011, reason="Cloud token is not configured.")
+            return
+        if not _token_matches(provided_token):
+            await websocket.close(code=1008, reason="Invalid or missing team token.")
+            return
+
+        await websocket.accept()
+        session_id = uuid.uuid4().hex[:16]
+        client_id = "unknown"
+        app_name: str | None = None
+        cleanup_level = "light"
+        audio_chunks: list[np.ndarray] = []
+        total_bytes = 0
+        last_partial_at = 0.0
+        last_partial_text = ""
+        session_registered = False
+
+        try:
+            try:
+                start_message = json.loads(await websocket.receive_text())
+            except (json.JSONDecodeError, TypeError, ValueError):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "The cloud session start message is invalid.",
+                })
+                return
+
+            context = start_message.get("context", {})
+            client_id = str(start_message.get("client_id", "")).strip()[:128]
+            app_name = str(context.get("app", "")).strip()[:200] if isinstance(context, dict) else ""
+            cleanup_level = str(start_message.get("cleanup_level", "light")).strip()
+            valid_start = (
+                start_message.get("type") == "start"
+                and client_id
+                and start_message.get("sample_rate") == _WEB_AUDIO_SAMPLE_RATE
+                and start_message.get("channels") == 1
+                and start_message.get("encoding") == "float32le"
+                and cleanup_level in _VALID_CLEANUP_LEVELS
+            )
+            if not valid_start:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "The cloud session settings are invalid.",
+                })
+                return
+
+            session_registered = True
+            _set_cloud_session(
+                session_id,
+                client_id=client_id,
+                app=app_name or None,
+                status="recording",
+                partial="",
+                seconds=0.0,
+            )
+            update_state(status="recording")
+            push_event({"type": "status", "value": "recording"})
+            await websocket.send_json({"type": "session_started", "session_id": session_id})
+
+            while True:
+                message = await websocket.receive()
+                if message["type"] == "websocket.disconnect":
+                    raise WebSocketDisconnect(message.get("code", 1000))
+
+                payload = message.get("bytes")
+                if payload is not None:
+                    if not payload or len(payload) % 4:
+                        raise WebAudioError("Audio chunks must contain float32 samples.")
+                    if len(payload) > _CLOUD_MAX_CHUNK_BYTES:
+                        raise WebAudioError("An audio chunk exceeded the 256 KB limit.")
+                    total_bytes += len(payload)
+                    if total_bytes > _CLOUD_MAX_AUDIO_BYTES:
+                        raise WebAudioError("Live audio must be 60 seconds or shorter.")
+                    chunk = np.frombuffer(payload, dtype="<f4").copy()
+                    if not np.isfinite(chunk).all():
+                        raise WebAudioError("Audio chunks must contain finite samples.")
+                    audio_chunks.append(np.clip(chunk, -1.0, 1.0))
+                    seconds = total_bytes / 4 / _WEB_AUDIO_SAMPLE_RATE
+                    _set_cloud_session(session_id, seconds=round(seconds, 1))
+
+                    now = time.monotonic()
+                    should_emit_partial = (
+                        seconds >= _CLOUD_MIN_PARTIAL_SECONDS
+                        and now - last_partial_at >= _CLOUD_PARTIAL_INTERVAL_SECONDS
+                    )
+                    if should_emit_partial:
+                        last_partial_at = now
+                        partial_audio = np.concatenate(audio_chunks)
+                        partial_text = await asyncio.to_thread(
+                            _transcribe_web_audio, partial_audio
+                        )
+                        if partial_text and partial_text != last_partial_text:
+                            last_partial_text = partial_text
+                            _set_cloud_session(session_id, partial=partial_text)
+                            event = {
+                                "type": "partial_transcript",
+                                "session_id": session_id,
+                                "client_id": client_id,
+                                "text": partial_text,
+                            }
+                            await websocket.send_json(event)
+                            push_event(event)
+                    continue
+
+                text_payload = message.get("text")
+                if text_payload is None:
+                    continue
+                try:
+                    control = json.loads(text_payload)
+                except json.JSONDecodeError as exc:
+                    raise WebAudioError("Cloud control message is invalid JSON.") from exc
+                if control.get("type") != "end_of_audio":
+                    raise WebAudioError("Unsupported cloud control message.")
+                break
+
+            if not audio_chunks:
+                raise WebAudioError("No microphone audio was received.")
+
+            update_state(status="processing")
+            _set_cloud_session(session_id, status="processing")
+            push_event({"type": "status", "value": "processing"})
+            audio = np.concatenate(audio_chunks)
+            raw_text = await asyncio.to_thread(_transcribe_web_audio, audio)
+            clean_text = ""
+            history_id = None
+            if raw_text:
+                clean_text = await asyncio.to_thread(
+                    _clean_cloud_transcript,
+                    raw_text,
+                    cleanup_level,
+                    app_name or None,
+                )
+                history_id = _history.save_entry(
+                    raw=raw_text,
+                    clean=clean_text,
+                    level=cleanup_level,
+                    app=app_name or None,
+                    client_id=client_id,
+                    status="final",
+                )
+                entry = _history.get_entry(history_id)
+                if entry:
+                    push_event({"type": "new_entry", "entry": entry})
+
+            final_event = {
+                "type": "final_transcript",
+                "session_id": session_id,
+                "raw": raw_text,
+                "text": clean_text,
+                "history_id": history_id,
+                "words": len(clean_text.split()),
+            }
+            await websocket.send_json(final_event)
+            push_event(final_event)
+        except WebSocketDisconnect:
+            print(f"[api] Cloud client disconnected: session={session_id}")
+        except WebAudioError as exc:
+            await websocket.send_json({"type": "error", "message": str(exc)})
+            push_event({
+                "type": "session_error",
+                "session_id": session_id,
+                "message": str(exc),
+            })
+        except Exception as exc:
+            print(f"[api] Cloud transcription failed for session {session_id}: {exc}")
+            try:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Cloud transcription failed.",
+                })
+            except Exception:
+                pass
+            push_event({
+                "type": "session_error",
+                "session_id": session_id,
+                "message": "Cloud transcription failed.",
+            })
+        finally:
+            if session_registered:
+                _remove_cloud_session(session_id)
+                remaining = _cloud_sessions_snapshot()
+                status = "recording" if remaining else "idle"
+                update_state(status=status)
+                push_event({
+                    "type": "live_session",
+                    "session": {"session_id": session_id, "status": "closed"},
+                })
+                push_event({"type": "status", "value": status})
 
     # ── SSE live events ─────────────────────────────────────────── #
 
@@ -408,11 +903,18 @@ def _persist_hotkey(key: str):
 
 # ── Server launcher ────────────────────────────────────────────────── #
 
-def start_server(host: str = "127.0.0.1", port: int = 57327):
+def start_server(
+    host: str = "127.0.0.1",
+    port: int = 57327,
+    *,
+    history_enabled: bool = True,
+):
     """Start uvicorn in a background daemon thread. Non-blocking."""
+    global _history_enabled
     if not _FASTAPI_OK:
         print("[api] FastAPI/uvicorn not installed — dashboard unavailable.")
         return
+    _history_enabled = history_enabled
 
     def _run():
         uvicorn.run(

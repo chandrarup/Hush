@@ -22,6 +22,13 @@ DEFAULT_CONFIG = {
     "injection": {
         "method": "auto",
     },
+    "cloud": {
+        "base_url": "",
+        "token": "",
+        "client_id": "",
+        "connect_timeout_seconds": 5,
+        "final_timeout_seconds": 90,
+    },
     "ui": {
         "show_notification": True,
         "notification_duration": 3,
