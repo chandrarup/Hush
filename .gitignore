@@ -45,6 +45,7 @@ htmlcov/
 # ── Secrets (belt-and-suspenders — none currently exist, keep protected) ─────
 .env
 .env.*
+!.env.example
 *.secret
 *.token
 *.pem
@@ -54,3 +55,8 @@ secrets.toml
 # ── Temp / scratch ────────────────────────────────────────────────────────────
 tmp/
 scratch/
+.codex-artifact/
+.codex-finalizer*/
+.codex-m2-build/
+.codex-pptx-build/
+.playwright-mcp/

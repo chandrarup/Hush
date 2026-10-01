@@ -12,18 +12,17 @@ Threading architecture:
 
 """
 
-import sys
 import os
 import time
 import threading
-import numpy as np
 
-from ..config import load_config, load_snippets, load_vocab
-from ..config.snippets import expand_snippets, is_exact_shortcut
+from ..config import load_config, persist_cloud_client_id
 from ..core.audio import AudioRecorder
-from ..core.vad import trim_silence, audio_duration
-from ..core.cleaner import clean_transcript, set_docker_llm_available
-from ..core import history as _history
+from ..core.cloud_client import (
+    CloudTranscriptionError,
+    CloudTranscriptionSession,
+    ensure_client_id,
+)
 from ..platform.factory import get_platform_services
 from ..runtime import configure_runtime_environment
 from ..web import api_server as _api
@@ -36,17 +35,14 @@ try:
 except ImportError:
     _PYNPUT = False
 
-MIN_AUDIO_SECONDS = 0.3
-
 # ── Globals ───────────────────────────────────────────────────────── #
 _config: dict           = {}
-_vocab:  list[str]      = []
-_transcriber            = None
 _recorder: AudioRecorder | None = None
+_cloud_session: CloudTranscriptionSession | None = None
 _hotkey_target          = None
 _hotkey_pressed         = False
 _captured_context: dict = {}
-_pipeline_lock          = threading.Lock()
+_session_lock           = threading.Lock()
 _listener               = None   # pynput Listener — kept alive in thread
 
 
@@ -168,87 +164,69 @@ def _apply_runtime_settings(settings: dict[str, str]) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────── #
-#  Pipeline                                                             #
+#  Cloud transcription                                                   #
 # ──────────────────────────────────────────────────────────────────── #
 
-def _run_pipeline(audio: np.ndarray, app_context: dict):
-    if not _pipeline_lock.acquire(blocking=False):
-        print("[main] Pipeline busy — skipping this recording.")
-        return
+def _cloud_settings() -> dict:
+    """Resolve cloud settings without placing the shared token in logs."""
+    cloud = _config.setdefault("cloud", {})
+    existing_client_id = str(cloud.get("client_id", "")).strip()
+    client_id = ensure_client_id(cloud)
+    if not existing_client_id:
+        persist_cloud_client_id(client_id)
+    return {
+        "base_url": os.getenv("HUSH_CLOUD_URL", cloud.get("base_url", "")),
+        "token": os.getenv("HUSH_TEAM_TOKEN", cloud.get("token", "")),
+        "client_id": client_id,
+        "connect_timeout": float(cloud.get("connect_timeout_seconds", 5)),
+        "final_timeout": float(cloud.get("final_timeout_seconds", 90)),
+    }
 
+
+def _handle_partial(text: str) -> None:
+    print(f"[main] PARTIAL: {text}")
+    _api.push_event({"type": "partial_transcript", "text": text})
+
+
+def _create_cloud_session(app_context: dict) -> CloudTranscriptionSession:
+    settings = _cloud_settings()
+    return CloudTranscriptionSession(
+        base_url=settings["base_url"],
+        token=settings["token"],
+        client_id=settings["client_id"],
+        app_context=app_context,
+        cleanup_level=_config.get("llm", {}).get("cleanup_level", "light"),
+        connect_timeout=settings["connect_timeout"],
+        final_timeout=settings["final_timeout"],
+        on_partial=_handle_partial,
+    )
+
+
+def _finish_cloud_session(session: CloudTranscriptionSession) -> None:
+    """Wait for the VM result, inject it once, and never run local ASR or cleanup."""
+    global _cloud_session
     tray = _platform.tray.get_tray()
     try:
         tray.set_state("processing")
-
-        # 1. VAD trim
-        audio = trim_silence(audio)
-        if audio_duration(audio) < MIN_AUDIO_SECONDS:
-            print("[main] Audio too short — discarding.")
+        result = session.finish()
+        raw_text = str(result.get("raw", "")).strip()
+        clean_text = str(result.get("text", "")).strip()
+        if not clean_text:
+            print("[main] Cloud returned no speech to insert.")
             return
 
-        # 2. Transcribe
-        if _transcriber is None:
-            print("[main] Transcriber not ready.")
-            return
-        raw_text = _transcriber.transcribe(audio, vocab=_vocab)
-        if not raw_text or not raw_text.strip():
-            print("[main] Empty transcript — discarding.")
-            return
-
-        print(f"\n{'─'*55}")
-        print(f"  RAW  : {raw_text}")
-
-        # 3. LLM cleanup (context-aware)
-        llm_cfg    = _config.get("llm", {})
-        inject_cfg = _config.get("injection", {})
-        active_app = app_context.get("app")
-        level      = llm_cfg.get("cleanup_level", "light")
-
-        snippets = load_snippets()
-        if is_exact_shortcut(raw_text, snippets):
-            clean_text = expand_snippets(raw_text, snippets)
-            print("  SNIPPET: expanded spoken shortcut")
-        else:
-            clean_text = clean_transcript(
-                raw_text,
-                level            = level,
-                docker_llm_url   = llm_cfg.get("docker_llm_url",   "http://localhost:12434/engines/llama.cpp/v1"),
-                docker_llm_model = llm_cfg.get("docker_llm_model", ""),
-                ollama_model     = llm_cfg.get("ollama_model",     "llama3.2:3b"),
-                ollama_base_url  = llm_cfg.get("ollama_base_url",  "http://localhost:11434"),
-                temperature      = llm_cfg.get("temperature", 0.1),
-                max_tokens       = llm_cfg.get("max_tokens", 500),
-                app_context      = active_app,
-            )
-
-        print(f"  CLEAN: {clean_text}")
-        print(f"{'─'*55}\n")
-
-        # 3b. Save to history + push live event
-        entry_id = _history.save_entry(
-            raw=raw_text, clean=clean_text,
-            level=level, app=active_app,
+        print(f"[main] FINAL: {clean_text}")
+        metrics = session.latency_metrics
+        print(
+            "[main] LATENCY "
+            f"first_partial_ms={metrics['first_partial_ms']} "
+            f"release_to_final_ms={metrics['release_to_final_ms']}"
         )
-        _api.push_event({
-            "type": "new_entry",
-            "entry": {
-                "id":    entry_id,
-                "ts":    __import__("datetime").datetime.now().isoformat(timespec="seconds"),
-                "raw":   raw_text,
-                "clean": clean_text,
-                "level": level,
-                "app":   active_app,
-                "words": len(clean_text.split()),
-            },
-        })
-
-        # 4. Inject text
+        inject_cfg = _config.get("injection", {})
         _platform.text.inject_text(
             clean_text,
             preferred_method=inject_cfg.get("method", "auto"),
         )
-
-        # 5. Notification
         ui_cfg = _config.get("ui", {})
         _platform.notifications.show_result(
             raw_text=raw_text,
@@ -256,13 +234,15 @@ def _run_pipeline(audio: np.ndarray, app_context: dict):
             duration_seconds=ui_cfg.get("notification_duration", 3),
             enabled=ui_cfg.get("show_notification", True),
         )
-
-    except Exception as e:
-        print(f"[main] Pipeline error: {e}")
-        import traceback; traceback.print_exc()
+    except CloudTranscriptionError as exc:
+        print(f"[main] Cloud transcription error: {exc}")
+        _api.push_event({"type": "session_error", "message": str(exc)})
     finally:
-        _pipeline_lock.release()
+        with _session_lock:
+            if _cloud_session is session:
+                _cloud_session = None
         tray.set_state("idle")
+        _api.push_event({"type": "status", "value": "idle"})
 
 
 # ──────────────────────────────────────────────────────────────────── #
@@ -270,27 +250,37 @@ def _run_pipeline(audio: np.ndarray, app_context: dict):
 # ──────────────────────────────────────────────────────────────────── #
 
 def _on_press(key):
-    global _hotkey_pressed, _captured_context
+    global _hotkey_pressed, _captured_context, _cloud_session
     if not _keys_match(key, _hotkey_target) or _hotkey_pressed:
         return
 
-    _hotkey_pressed    = True
+    with _session_lock:
+        if _cloud_session is not None:
+            print("[main] Previous cloud transcription is still finishing.")
+            return
+
     _captured_context  = _platform.context.get_active_context()
     app_name = _captured_context.get("app", "unknown")
     is_ai    = _captured_context.get("is_ai_chat", False)
-    print(f"[main] ● RECORDING  app='{app_name}'" + (" [AI chat]" if is_ai else ""))
+    try:
+        session = _create_cloud_session(_captured_context).start()
+        if not _recorder:
+            session.abort()
+            raise CloudTranscriptionError("The microphone recorder is unavailable.")
+        _recorder.start(on_chunk=session.send_audio, retain_audio=False)
+    except (CloudTranscriptionError, RuntimeError) as exc:
+        print(f"[main] Cannot start cloud dictation: {exc}")
+        _api.push_event({"type": "session_error", "message": str(exc)})
+        _api.push_event({"type": "status", "value": "idle"})
+        _platform.tray.get_tray().set_state("idle")
+        return
 
+    with _session_lock:
+        _cloud_session = session
+    _hotkey_pressed = True
+    print(f"[main] RECORDING TO CLOUD  app='{app_name}'" + (" [AI chat]" if is_ai else ""))
     _platform.tray.get_tray().set_state("recording")
     _api.push_event({"type": "status", "value": "recording"})
-    if _recorder:
-        try:
-            _recorder.start()
-        except RuntimeError as e:
-            # No audio device available (e.g. headphones disconnected mid-session)
-            print(f"[main] ⚠ Audio device error: {e} — try plugging in a mic and pressing again.")
-            _api.push_event({"type": "status", "value": "idle"})
-            _platform.tray.get_tray().set_state("idle")
-            _hotkey_pressed = False  # let next press retry
 
 
 def _on_release(key):
@@ -299,18 +289,22 @@ def _on_release(key):
         return
 
     _hotkey_pressed = False
-    print("[main] ■ STOPPED — running pipeline…")
+    print("[main] STOPPED — waiting for the cloud result...")
     _api.push_event({"type": "status", "value": "processing"})
 
     if not _recorder:
         return
 
-    audio   = _recorder.stop()
-    context = dict(_captured_context)
+    _recorder.stop()
+    with _session_lock:
+        session = _cloud_session
+    if session is None:
+        _api.push_event({"type": "status", "value": "idle"})
+        return
 
     threading.Thread(
-        target=_run_pipeline, args=(audio, context),
-        daemon=True, name="pipeline"
+        target=_finish_cloud_session, args=(session,),
+        daemon=True, name="cloud-finalize"
     ).start()
 
 
@@ -342,13 +336,14 @@ def _start_listener():
             suppress=False,
         )
         lst.start()   # called from main thread — CFRunLoop exists here
+        lst.wait()    # Wait until pynput's listener thread has evaluated macOS trust.
         _listener = lst
         trusted = getattr(lst, 'IS_TRUSTED', None)
         if trusted is False:
             print("\n" + "!" * 66)
             print("[main] ⚠  IS_TRUSTED = False — GLOBAL KEYBOARD ACCESS NOT GRANTED")
             print("[main]    The operating system is blocking global key events.")
-            print("[main]    Enable Accessibility for Hush, then restart if macOS asks.")
+            print("[main]    Enable Input Monitoring for Hush, then restart if macOS asks.")
             print("!" * 66 + "\n")
         else:
             print(f"[main] ✓ Keyboard listener started. IS_TRUSTED={trusted}")
@@ -369,50 +364,26 @@ def _start_listener():
 
 
 # ──────────────────────────────────────────────────────────────────── #
-#  Docker LLM check                                                     #
-# ──────────────────────────────────────────────────────────────────── #
-
-def _check_docker_llm(url: str):
-    import requests
-    try:
-        r = requests.get(url.rstrip("/") + "/models", timeout=3)
-        if r.ok:
-            names = [m.get("id","?") for m in r.json().get("data", [])[:3]]
-            print(f"[main] ✓ Docker LLM at {url}  models={names}")
-            set_docker_llm_available(True)
-        else:
-            print(f"[main] ✗ Docker LLM status {r.status_code} — will use Ollama.")
-            set_docker_llm_available(False)
-    except Exception as e:
-        print(f"[main] ✗ Docker LLM unreachable ({e}) — will use Ollama.")
-        set_docker_llm_available(False)
-
-
-# ──────────────────────────────────────────────────────────────────── #
 #  Entry point                                                          #
 # ──────────────────────────────────────────────────────────────────── #
 
 def main():
-    global _config, _vocab, _transcriber, _recorder, _hotkey_target
+    global _config, _recorder, _hotkey_target
 
     configure_runtime_environment()
-    # Import model providers after their packaged cache location is configured.
-    from ..core.transcriber import create_transcriber
 
     print("=" * 60)
-    print("  Hush — Local Push-to-Talk Dictation")
+    print("  Hush — Cloud Push-to-Talk Dictation")
     print("=" * 60)
 
     # ── Config ───────────────────────────────────────────────────────
     _config = load_config()
-    _vocab  = load_vocab()
+    cloud_settings = _cloud_settings()
 
     # ── Local dashboard and onboarding ───────────────────────────────
-    # Start this before model initialization so first-run permissions do not
-    # wait for a potentially large model download.
+    # Start the local permissions/settings UI before registering the hotkey.
     ui_cfg = _config.get("ui", {})
     dashboard_port = ui_cfg.get("dashboard_port", 57327)
-    asr_cfg = _config.get("asr", {})
     first_launch = _platform.permissions.is_first_launch()
     resuming_onboarding = first_launch and _platform.permissions.is_onboarding_in_progress()
     if resuming_onboarding:
@@ -420,12 +391,14 @@ def main():
     if first_launch:
         _platform.permissions.begin_onboarding()
 
-    _api.start_server(port=dashboard_port)
+    _api.start_server(port=dashboard_port, history_enabled=False)
     _api.update_state(
         cleanup_level=_config.get("llm", {}).get("cleanup_level", "light"),
         hotkey=_config.get("hotkey", {}).get("key", "ctrl_l"),
-        asr_engine=asr_cfg.get("engine", "auto"),
+        asr_engine="whisper",
         ollama_model=_config.get("llm", {}).get("ollama_model", "llama3.2:3b"),
+        cloud_url=cloud_settings["base_url"],
+        client_id=cloud_settings["client_id"],
     )
 
     if resuming_onboarding:
@@ -443,35 +416,12 @@ def main():
     # ── Permission check ─────────────────────────────────────────────
     _platform.permissions.check_accessibility_permission()
 
-    # ── Docker LLM check (background, non-blocking) ───────────────────
-    llm_cfg    = _config.get("llm", {})
-    docker_url = llm_cfg.get("docker_llm_url", "http://localhost:12434/engines/llama.cpp/v1")
-    threading.Thread(target=_check_docker_llm, args=(docker_url,), daemon=True).start()
-
-    # ── ASR model (load once) ─────────────────────────────────────────
-    engine  = asr_cfg.get("engine", "auto")
-    model   = asr_cfg.get("model",  "")
-    print(f"\n[main] Loading ASR  engine={engine}  model={model or 'default'}")
-    print("[main] First run downloads the model (~1-2 GB), cached after that.\n")
-
-    try:
-        _transcriber = create_transcriber(
-            engine=engine,
-            model=model,
-            language=asr_cfg.get("language", "en"),
-            compute_type_gpu=asr_cfg.get("compute_type_gpu", "float16"),
-            compute_type_cpu=asr_cfg.get("compute_type_cpu", "int8"),
-        )
-    except Exception as e:
-        print(f"[main] FATAL: Cannot load ASR model: {e}")
-        sys.exit(1)
-
     # ── Audio recorder ────────────────────────────────────────────────
     try:
         _recorder = AudioRecorder(sample_rate=16000, channels=1)
     except Exception as e:
         print(f"[main] FATAL: Audio recorder error: {e}")
-        sys.exit(1)
+        raise SystemExit(1) from e
 
     # ── Hotkey ────────────────────────────────────────────────────────
     hk_cfg         = _config.get("hotkey", {})
@@ -485,9 +435,9 @@ def main():
     kb_thread = _start_listener()
 
     print(f"\n[main] Hotkey : {key_name}")
-    print(f"[main] Engine : {type(_transcriber).__name__}")
-    print(f"[main] LLM    : {docker_url}")
-    print("\n[main] ✓ Ready — hold hotkey to record, release to transcribe.")
+    print(f"[main] Cloud  : {cloud_settings['base_url'] or 'not configured'}")
+    print("[main] ASR, cleanup, snippets, and history run on the cloud server.")
+    print("\n[main] Ready — hold hotkey to stream, release to insert the final text.")
     print("[main] Right-click the menu bar icon to Quit.")
     print("[main] (If hotkey does nothing, check keyboard/input permission for the launcher)\n")
 
@@ -496,7 +446,7 @@ def main():
     tray.setup(on_quit=lambda: os._exit(0), dashboard_port=dashboard_port)
 
     print(f"\n[main] Dashboard : http://localhost:{dashboard_port}")
-    print("[main] ✓ Ready — hold hotkey to record, release to transcribe.")
+    print("[main] Ready — hold hotkey to stream, release to insert the final text.")
     print("[main] Right-click the menu bar icon to open Dashboard or Quit.\n")
 
     # This BLOCKS until the user clicks Quit in the tray menu

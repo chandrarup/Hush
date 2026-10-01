@@ -45,7 +45,7 @@ OPTIONS = {
         'LSMinimumSystemVersion': '12.0',
     },
     'packages': [
-        'fastapi', 'uvicorn', 'starlette', 'anyio',
+        'fastapi', 'uvicorn', 'starlette', 'anyio', 'websockets',
         'voiceflow', 'voiceflow.app', 'voiceflow.core',
         'voiceflow.config', 'voiceflow.prompts',
         'voiceflow.platform', 'voiceflow.platform.backends',

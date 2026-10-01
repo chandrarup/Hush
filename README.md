@@ -1,9 +1,30 @@
-# VoiceFlow
+# Hush
 
-**Local push-to-talk speech-to-text dictation — a Wispr Flow replica using 100% open-source tools.**
+## Milestone 3 container deployment
+
+The Linux cloud service runs as the same versioned `linux/amd64` image locally
+and on the GCP VM. The macOS client remains native because microphone access,
+global hotkeys, Accessibility, and text insertion require macOS permissions.
+
+```bash
+cp .env.example .env
+# Replace the placeholder HUSH_TEAM_TOKEN in .env.
+docker compose build hush
+docker compose up -d
+docker compose ps
+curl -fsS http://127.0.0.1:57327/status
+```
+
+Compose starts Hush, Ollama, and a one-time model initialization service. Hush
+data, the Whisper download cache, and Ollama models use named volumes. See
+[`deliverables/Hush_Milestone3_Runbook.md`](deliverables/Hush_Milestone3_Runbook.md)
+for Artifact Registry and VM deployment commands. Never commit `.env`.
+
+**Push-to-talk dictation with a thin desktop client and a self-hosted cloud transcription server.**
 
 Hold a hotkey → speak → release → polished text appears wherever your cursor is.
-No cloud APIs. No subscriptions. No data leaves your machine.
+The laptop streams microphone chunks to your authorized Hush VM; the VM owns
+transcription, cleanup, snippets, and history.
 
 ---
 
@@ -11,12 +32,13 @@ No cloud APIs. No subscriptions. No data leaves your machine.
 
 1. **Hold** Left Control (configurable) - microphone starts recording
 2. **Speak** anything naturally (filler words, false starts, all fine)
-3. **Release** the hotkey — pipeline runs automatically:
-   - Voice Activity Detection trims silence
-   - Whisper (`large-v3-turbo`) transcribes your speech
-   - Llama 3.2 (via Ollama) removes filler words, fixes grammar, resolves self-corrections
-   - Clean text is injected directly into whatever text field is focused
-4. A floating notification shows raw vs. cleaned text for 3 seconds
+3. **While speaking**, 16 kHz mono audio chunks stream to the Hush VM and live
+   partial transcripts appear on the cloud dashboard.
+4. **Release** the hotkey — the VM finalizes Whisper transcription, expands
+   snippets, cleans the text, and stores the result in VM SQLite.
+5. The desktop receives only the final result and inserts it into the text field
+   that was active when dictation began.
+6. A floating notification shows raw vs. cleaned text for 3 seconds.
 
 **Example:**
 > You say: *"um so I was thinking like maybe we should uh meet at 4pm actually no 3pm works better"*
@@ -34,14 +56,11 @@ or a manually selected executable path.
 2. Open it and drag **Hush** to **Applications**.
 3. Eject the DMG, then open **Hush** from Applications. Hush opens its local
    dashboard in your browser.
-4. Choose **Allow** for Microphone, then choose **Enable** for Accessibility
-   and turn on **Hush** in the System Settings page that macOS opens.
+4. Choose **Allow** for Microphone, enable **Hush** under Input Monitoring for
+   the global hotkey, then enable **Hush** under Accessibility for text insertion.
 
-Input Monitoring is not a required setup step for the free Hush build. macOS
-does not reliably list an unsigned app in that pane, while Accessibility covers
-the event-listening and text-insertion path Hush uses. If the hotkey works, the
-setup is complete. Do not add Terminal or Python to any privacy list for the
-installed app.
+If Hush is absent from either privacy pane, use **+** to select
+`/Applications/Hush.app`. Do not add Terminal or Python for the installed app.
 
 See [the macOS app guide](docs/MACOS_APP_RELEASE.md) for the complete install,
 reinstall, and troubleshooting flow.
@@ -54,9 +73,9 @@ reinstall, and troubleshooting flow.
 |-----------|---------|
 | Python 3.10+ | Runtime |
 | [uv](https://docs.astral.sh/uv/) | Application environment and dependency manager |
-| [Ollama](https://ollama.com) | Local LLM server |
+| Hush VM | Whisper, cleanup, snippets, dashboard, and SQLite history |
+| Shared team token | Authenticates desktop WebSocket sessions and dashboard changes |
 | PortAudio | Audio I/O backend |
-| librosa (Parakeet extra) | Required for Parakeet ASR on Apple Silicon |
 | xdotool (Linux) | Text injection |
 
 ---
@@ -68,25 +87,7 @@ environment and have different macOS permission requirements from the installed
 app. See [docs/setup.md](docs/setup.md) for the complete source setup and
 diagnostic guide.
 
-### 1. Install Ollama
-
-**macOS:**
-```bash
-brew install ollama
-# or download from https://ollama.com/download
-```
-
-**Linux:**
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-Start the Ollama server (keep this running in the background):
-```bash
-ollama serve
-```
-
-### 2. Install uv
+### 1. Install uv
 
 VoiceFlow uses [uv](https://docs.astral.sh/uv/) to manage its application
 environment. Install it once if it is not already available:
@@ -99,7 +100,7 @@ brew install uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 3. Run the installer
+### 2. Run the installer
 
 On macOS, use the beginner-friendly project launcher. It runs the installer and
 then lets you reopen the exact permission instructions for your machine:
@@ -118,16 +119,34 @@ bash scripts/setup_cross_platform.sh
 ```
 
 Both setup paths use `uv` to create or update the application environment,
-create the project-local `data/` files, and prepare the local LLM. The macOS installer
-is the recommended path for this repository.
+create the project-local configuration files. The macOS installer is the
+recommended path for this repository.
 
-### 4. Launch VoiceFlow
+### 3. Configure the cloud connection
+
+Set the VM URL in `data/config.toml`. Keep the shared token out of Git; prefer
+the environment variable when launching Hush:
+
+```toml
+[cloud]
+base_url = "http://VM_PUBLIC_IP:57327"
+token = ""
+```
+
+```bash
+HUSH_TEAM_TOKEN="YOUR_SHARED_TEAM_TOKEN" uv run --no-dev python -m voiceflow.app.main
+```
+
+The VM firewall must still restrict TCP `57327` to the team public IP addresses.
+
+### 4. Launch Hush
 
 ```bash
 uv run --no-dev python -m voiceflow.app.main
 ```
 
-On first launch, Whisper will download the `large-v3-turbo` model (~1.5 GB). This only happens once; it is cached in `~/.cache/huggingface/`.
+The desktop does not load or download a speech model. The VM downloads and
+caches `faster-whisper` `base.en` on its first transcription request.
 
 ---
 
@@ -143,13 +162,8 @@ sudo apt-get install portaudio19-dev xdotool libnotify-bin
 # Install uv once if needed: https://docs.astral.sh/uv/getting-started/installation/
 
 # Python application dependencies
-# macOS: include the Parakeet accelerator path
-uv sync --extra parakeet --no-dev
-# Linux/Windows: Whisper-only default
-# uv sync --no-dev
+uv sync --no-dev
 
-# Ollama model
-ollama pull llama3.2:3b
 ```
 
 ---
@@ -181,29 +195,23 @@ max_tokens = 500
 [injection]
 method = "auto"            # auto | quartz | clipboard | pyautogui | xdotool
 
+[cloud]
+base_url = "http://VM_PUBLIC_IP:57327"
+token = ""                 # Prefer HUSH_TEAM_TOKEN instead of saving this.
+client_id = ""             # Generated and persisted on first launch.
+connect_timeout_seconds = 5
+final_timeout_seconds = 90
+
 [ui]
 show_notification = true
 notification_duration = 3
 dashboard_port = 57327
 ```
 
-### ASR engine options
+### Cloud speech model
 
-| Engine | Best for | Notes |
-|--------|----------|-------|
-| `auto` | Recommended | Uses Parakeet when an accelerator is available, otherwise Whisper |
-| `parakeet` | Apple Silicon speed | Requires `transformers`, `torch`, and `librosa` |
-| `whisper` | Compatibility | Uses `faster-whisper` and supports more languages |
-
-### Whisper model options (from fastest to most accurate)
-
-| Model | Size | Speed | Accuracy |
-|-------|------|-------|----------|
-| `tiny` | ~75 MB | ★★★★★ | ★★ |
-| `base` | ~145 MB | ★★★★ | ★★★ |
-| `small` | ~483 MB | ★★★ | ★★★★ |
-| `medium` | ~1.5 GB | ★★ | ★★★★ |
-| `large-v3-turbo` | ~1.6 GB | ★★★ | ★★★★★ |
+Live WebSocket sessions use `faster-whisper` `base.en` on the VM. The desktop
+does not load Parakeet or Whisper and has no local transcription fallback.
 
 ### Available hotkeys
 
@@ -232,18 +240,46 @@ University of Houston
 CAR-T
 ```
 
+## Optional Gemini Transcribe test
+
+To compare the VM transcription path with Google Cloud's Gemini 3.5 Transcribe
+preview model, use the separate button-driven diagnostic prototype in
+`scripts/gemini_transcribe_button.py`. Audio recorded through this script is
+sent to Google Cloud.
+
+```bash
+gcloud auth application-default login
+uv run --with google-genai python scripts/gemini_transcribe_button.py \
+  --project project-25e4d84e-0cf5-4f81-89b \
+  --language en-US
+```
+
+Open the printed local URL, click **Start recording**, speak, then click
+**Stop and transcribe**. The script records from the default microphone, trims
+silence, sends a WAV clip to `gemini-3.5-transcribe-preview`, and prints the
+transcript in the browser page.
+
+Optional flags:
+
+```bash
+--location global
+--port 57328
+--no-open
+--diarization
+--word-timestamps
+--vocab "Hush"
+--vocab "University of Houston"
+```
+
 ---
 
 ## macOS Notes
 
 - Text injection uses **Quartz** by default on macOS.
 - The tray icon appears in the menu bar.
-- The installed **Hush.app** needs Microphone and Accessibility. macOS opens the
+- The installed **Hush.app** needs Microphone, Input Monitoring, and Accessibility. macOS opens the
   relevant pages as Hush requests them. Do not add Terminal, Python, or a
   virtual-environment path for the installed app.
-- Input Monitoring is not a required step for the free installed build. The
-  hotkey can work in other apps after Accessibility is enabled even if Hush is
-  absent from that pane.
 - Source runs are different: see [docs/setup.md](docs/setup.md) for the
   launcher-specific Terminal and Python.app guidance.
 
@@ -319,22 +355,24 @@ sudo apt-get install xdotool
 # or change config: method = "clipboard"
 ```
 
-**Ollama not running / LLM unavailable**
+**VM Ollama not running / cleanup unavailable**
 ```bash
-# In a separate terminal:
+# Run on the VM:
 ollama serve
 ```
-VoiceFlow degrades gracefully — if Ollama is unavailable, it injects the raw Whisper transcript.
+Hush degrades gracefully to the raw VM transcript if the configured cleanup
+provider is unavailable.
 
 **pynput permission error while running from source on macOS**
 ```
 System Settings → Privacy & Security → Input Monitoring → add Terminal (or Python)
 ```
-This does not apply to an installed `Hush.app`; use the app's Accessibility
-setup instead.
+For an installed `Hush.app`, add Hush itself under both Input Monitoring and
+Accessibility.
 
-**Whisper downloading model on every run**
-The model is cached in `~/.cache/huggingface/`. If it re-downloads, check that directory is writable.
+**Whisper downloading the model on every VM start**
+The model is cached on the VM under its service user's Hugging Face cache. If it
+re-downloads, check that the service has a stable writable home directory.
 
 **Tray icon not appearing on Linux (Wayland)**
 pystray requires a system tray. On pure Wayland, install `gnome-shell-extension-appindicator` or switch to X11.

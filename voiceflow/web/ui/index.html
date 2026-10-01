@@ -115,6 +115,31 @@ nav { flex: 1; display: flex; flex-direction: column; gap: 2px; }
   font-size: 13px; font-weight: 500; white-space: nowrap; flex-shrink: 0;
 }
 
+/* ── Cloud transcription ─────────────────────────────── */
+.transcribe-panel {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px;
+  align-items: center; border: 1px solid var(--border); border-radius: 8px;
+  padding: 18px 20px; margin-bottom: 28px; background: #fafafa;
+}
+.transcribe-heading { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; }
+.transcribe-meta { min-width: 0; color: var(--text-3); font-size: 12px; line-height: 1.5; }
+.transcribe-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.audio-file-input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
+.audio-file-label { min-width: 116px; text-align: center; }
+.transcribe-result {
+  grid-column: 1 / -1; border-top: 1px solid var(--border); padding-top: 14px;
+  color: var(--text-1); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap;
+}
+.transcribe-result.error { color: var(--recording); }
+.live-transcript { min-height: 22px; }
+.diagnostic-upload { margin-bottom: 28px; }
+.diagnostic-upload > summary {
+  cursor: pointer; color: var(--text-3); font-size: 12px; font-weight: 600;
+  margin-bottom: 10px;
+}
+.diagnostic-upload .transcribe-panel { margin-bottom: 0; }
+.btn[disabled] { cursor: not-allowed; opacity: .55; }
+
 /* ── History feed ─────────────────────────────────────── */
 .feed-section-label { font-size: 11px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; margin: 20px 0 8px; }
 .feed-empty { color: var(--text-3); font-size: 13px; padding: 40px 0; text-align: center; }
@@ -267,6 +292,7 @@ html[data-theme="dark"] .stats-bar,
 html[data-theme="dark"] .entry-diff,
 html[data-theme="dark"] .settings-row { background: #1b1b1b; }
 html[data-theme="dark"] .entry-app { background: #2a2a2a; }
+html[data-theme="dark"] .transcribe-panel { background: #1b1b1b; }
 html[data-theme="dark"] .btn,
 html[data-theme="dark"] .settings-control select,
 html[data-theme="dark"] .settings-control input,
@@ -281,6 +307,29 @@ html[data-theme="dark"] .search-bar { background: #1b1b1b; color: var(--text-1);
 html[data-theme="dark"] .level-preview { background: #24203a; }
 html[data-theme="dark"] .level-card.active .level-preview { background: var(--accent-bg); }
 html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
+
+@media (max-width: 720px) {
+  .app { min-height: 100vh; height: auto; overflow: visible; flex-direction: column; }
+  .sidebar { width: 100%; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .logo { padding: 2px 8px 10px; }
+  nav { flex-direction: row; overflow: visible; }
+  .nav-item { flex: 1; justify-content: center; min-width: 0; padding: 8px 6px; white-space: nowrap; }
+  .nav-item .icon { display: none; }
+  .sidebar-bottom { display: none; }
+  .main { overflow: visible; min-width: 0; }
+  .topbar { height: 48px; padding: 0 16px; }
+  .page { padding: 22px 16px; overflow: visible; }
+  .banner { align-items: flex-start; flex-direction: column; gap: 16px; padding: 22px; }
+  .transcribe-panel { grid-template-columns: 1fr; padding: 16px; }
+  .transcribe-controls { justify-content: flex-start; flex-wrap: wrap; }
+  .transcribe-result { grid-column: 1; }
+  .level-grid { grid-template-columns: 1fr; }
+  .settings-row { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .entry-row { align-items: center; flex-wrap: wrap; gap: 8px; }
+  .entry-time { width: auto; }
+  .entry-clean { flex-basis: 100%; order: 2; }
+  .diff-grid { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -354,6 +403,31 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
         </div>
         <div class="hotkey-badge" id="hotkey-badge">Left Control</div>
       </div>
+
+      <section class="transcribe-panel" aria-labelledby="live-heading">
+        <div>
+          <div class="transcribe-heading" id="live-heading">Live cloud transcription</div>
+          <div class="transcribe-meta" id="live-session-meta">Waiting for a desktop client</div>
+        </div>
+        <div class="transcribe-meta" id="live-session-client">No active session</div>
+        <div class="transcribe-result live-transcript" id="live-transcript" role="status" aria-live="polite">Hold the Hush hotkey on an authorized computer to begin.</div>
+      </section>
+
+      <details class="diagnostic-upload">
+        <summary>Diagnostic audio upload</summary>
+      <section class="transcribe-panel" aria-labelledby="transcribe-heading">
+        <div>
+          <div class="transcribe-heading" id="transcribe-heading">Upload a test recording</div>
+          <div class="transcribe-meta" id="audio-file-name">No audio selected</div>
+        </div>
+        <div class="transcribe-controls">
+          <input class="audio-file-input" id="audio-file" type="file" accept="audio/*,.wav,.m4a,.mp3,.ogg,.webm">
+          <label class="btn audio-file-label" for="audio-file">Choose audio</label>
+          <button class="btn primary" id="btn-transcribe" type="button" disabled>Transcribe</button>
+        </div>
+        <div class="transcribe-result" id="transcribe-result" role="status" aria-live="polite" hidden></div>
+      </section>
+      </details>
 
       <div id="home-feed"></div>
     </div>
@@ -454,14 +528,12 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
         <h3>Speech Recognition</h3>
         <div class="settings-row">
           <div>
-            <div class="settings-row-label">ASR Engine</div>
-            <div class="settings-row-sub">Parakeet is 10× faster on Apple Silicon</div>
+            <div class="settings-row-label">Cloud speech model</div>
+            <div class="settings-row-sub">Live sessions run on the VM</div>
           </div>
           <div class="settings-control">
-            <select id="sel-engine">
-              <option value="auto">Auto (Parakeet → Whisper)</option>
-              <option value="parakeet">Parakeet (Apple Silicon)</option>
-              <option value="whisper">Whisper</option>
+            <select id="sel-engine" disabled>
+              <option value="whisper">Whisper base.en</option>
             </select>
           </div>
         </div>
@@ -527,7 +599,25 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
 </div><!-- /app -->
 
 <script>
-const API = 'http://localhost:57327';
+const API = window.location.origin;
+const TOKEN_STORAGE_KEY = 'hush-team-token';
+const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+const suppliedToken = hash.get('token');
+if (suppliedToken) {
+  sessionStorage.setItem(TOKEN_STORAGE_KEY, suppliedToken);
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+}
+const TEAM_TOKEN = sessionStorage.getItem(TOKEN_STORAGE_KEY) || '';
+
+function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (TEAM_TOKEN) headers.set('Authorization', 'Bearer ' + TEAM_TOKEN);
+  return fetch(url, {...options, headers});
+}
+
+function eventStreamUrl() {
+  return API + '/events';
+}
 
 // ── Theme ────────────────────────────────────────────────────────── //
 const THEME_STORAGE_KEY = 'voiceflow-theme';
@@ -588,7 +678,7 @@ function buildEntryCard(e) {
     <div class="entry-row">
       <span class="entry-time">${fmtTime(e.ts)}</span>
       <span class="entry-clean">${escHtml(e.clean)}</span>
-      <span class="entry-level">${e.level}</span>
+      <span class="entry-level">${escHtml(e.level)}</span>
       ${e.app ? `<span class="entry-app">${escHtml(e.app)}</span>` : ''}
     </div>
     <div class="entry-diff" id="diff-${e.id}">
@@ -598,30 +688,29 @@ function buildEntryCard(e) {
           <p>${escHtml(e.raw)}</p>
         </div>
         <div class="diff-col clean">
-          <h4>✦ Cleaned (${e.level})</h4>
+          <h4>✦ Cleaned (${escHtml(e.level)})</h4>
           <p>${escHtml(e.clean)}</p>
         </div>
       </div>
       <div class="diff-actions">
-        <button class="btn primary" onclick="copyText('${escAttr(e.clean)}')">Copy cleaned</button>
-        <button class="btn" onclick="copyText('${escAttr(e.raw)}')">Copy raw</button>
-        <button class="btn danger" onclick="deleteEntry(${e.id}, this)">Delete</button>
+        <button class="btn primary copy-clean" type="button">Copy cleaned</button>
+        <button class="btn copy-raw" type="button">Copy raw</button>
+        <button class="btn danger delete-entry" type="button">Delete</button>
       </div>
     </div>`;
   card.querySelector('.entry-row').addEventListener('click', () => {
     const diff = card.querySelector('.entry-diff');
     diff.classList.toggle('open');
   });
+  card.querySelector('.copy-clean').addEventListener('click', () => copyText(String(e.clean)));
+  card.querySelector('.copy-raw').addEventListener('click', () => copyText(String(e.raw)));
+  card.querySelector('.delete-entry').addEventListener('click', event => deleteEntry(e.id, event.currentTarget));
   return card;
 }
 
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function escAttr(s) {
-  return String(s).replace(/'/g, "\\'").replace(/\n/g, ' ');
-}
-
 function renderFeed(entries, container, limit) {
   container.innerHTML = '';
   if (!entries.length) {
@@ -640,13 +729,113 @@ function renderFeed(entries, container, limit) {
 }
 
 // ── Home ─────────────────────────────────────────────────────────── //
+const audioFileInput = document.getElementById('audio-file');
+const transcribeButton = document.getElementById('btn-transcribe');
+const transcribeResult = document.getElementById('transcribe-result');
+
+audioFileInput.addEventListener('change', () => {
+  const file = audioFileInput.files?.[0];
+  document.getElementById('audio-file-name').textContent = file ? file.name : 'No audio selected';
+  transcribeButton.disabled = !file;
+  transcribeResult.hidden = true;
+});
+
+function encodePcmWav(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeText = (offset, text) => {
+    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
+  };
+  writeText(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeText(8, 'WAVE');
+  writeText(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeText(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  samples.forEach((sample, index) => {
+    const clipped = Math.max(-1, Math.min(1, sample));
+    view.setInt16(44 + index * 2, clipped < 0 ? clipped * 32768 : clipped * 32767, true);
+  });
+  return new Blob([buffer], {type: 'audio/wav'});
+}
+
+function resampleMono(audioBuffer, targetRate = 16000) {
+  const mono = new Float32Array(audioBuffer.length);
+  for (let channel = 0; channel < audioBuffer.numberOfChannels; channel += 1) {
+    const source = audioBuffer.getChannelData(channel);
+    for (let i = 0; i < source.length; i += 1) mono[i] += source[i] / audioBuffer.numberOfChannels;
+  }
+  if (audioBuffer.sampleRate === targetRate) return mono;
+
+  const outputLength = Math.ceil(mono.length * targetRate / audioBuffer.sampleRate);
+  const output = new Float32Array(outputLength);
+  const ratio = audioBuffer.sampleRate / targetRate;
+  for (let i = 0; i < outputLength; i += 1) {
+    const position = i * ratio;
+    const left = Math.floor(position);
+    const right = Math.min(left + 1, mono.length - 1);
+    const mix = position - left;
+    output[i] = mono[left] * (1 - mix) + mono[right] * mix;
+  }
+  return output;
+}
+
+async function prepareAudioUpload(file) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) throw new Error('This browser cannot decode audio files.');
+  const context = new AudioContextClass();
+  try {
+    const decoded = await context.decodeAudioData(await file.arrayBuffer());
+    if (decoded.duration > 60) throw new Error('Choose an audio file that is 60 seconds or shorter.');
+    return encodePcmWav(resampleMono(decoded), 16000);
+  } finally {
+    await context.close();
+  }
+}
+
+transcribeButton.addEventListener('click', async () => {
+  const file = audioFileInput.files?.[0];
+  if (!file) return;
+  transcribeButton.disabled = true;
+  transcribeButton.textContent = 'Transcribing...';
+  transcribeResult.hidden = false;
+  transcribeResult.classList.remove('error');
+  transcribeResult.textContent = 'Preparing audio...';
+  try {
+    const wav = await prepareAudioUpload(file);
+    transcribeResult.textContent = 'Transcribing with Whisper base.en...';
+    const response = await apiFetch(API + '/transcribe', {
+      method: 'POST',
+      headers: {'Content-Type': 'audio/wav'},
+      body: wav,
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Transcription failed.');
+    transcribeResult.textContent = payload.text || 'No speech detected.';
+    await loadHome();
+  } catch (error) {
+    transcribeResult.classList.add('error');
+    transcribeResult.textContent = error.message || 'Transcription failed.';
+  } finally {
+    transcribeButton.disabled = false;
+    transcribeButton.textContent = 'Transcribe';
+  }
+});
+
 async function loadHome() {
   document.getElementById('today-label').textContent = new Date().toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
   try {
     const [stats, entries, status] = await Promise.all([
-      fetch(API+'/stats').then(r=>r.json()),
-      fetch(API+'/history?limit=50').then(r=>r.json()),
-      fetch(API+'/status').then(r=>r.json()),
+      apiFetch(API+'/stats').then(r=>r.json()),
+      apiFetch(API+'/history?limit=50').then(r=>r.json()),
+      apiFetch(API+'/status').then(r=>r.json()),
     ]);
     allEntries = entries;
     document.getElementById('stat-words').textContent = stats.total_words >= 1000
@@ -659,6 +848,7 @@ async function loadHome() {
     setActiveLevel(status.cleanup_level || 'light');
     document.getElementById('sel-engine').value = status.asr_engine || 'auto';
     document.getElementById('sel-model').value = status.ollama_model || 'llama3.2:3b';
+    if (status.live_sessions?.length) updateLiveSession(status.live_sessions[0]);
   } catch(e) {
     console.error('Home load failed', e);
   }
@@ -669,7 +859,7 @@ let allEntries = [];
 
 async function loadHistory() {
   try {
-    allEntries = await fetch(API+'/history').then(r=>r.json());
+    allEntries = await apiFetch(API+'/history').then(r=>r.json());
     renderHistory(allEntries);
   } catch(e) {
     document.getElementById('history-feed').innerHTML = '<div class="feed-empty">Could not load history.</div>';
@@ -688,7 +878,7 @@ document.getElementById('search-input').addEventListener('input', e => {
 
 document.getElementById('btn-clear-all').addEventListener('click', async () => {
   if (!confirm('Delete all transcription history?')) return;
-  await fetch(API+'/history', {method:'DELETE'});
+  await apiFetch(API+'/history', {method:'DELETE'});
   allEntries = [];
   renderHistory([]);
   loadHome();
@@ -721,7 +911,7 @@ function renderSnippets(data) {
   const list = document.getElementById('snippet-list');
   const snippets = data.snippets || [];
   snippetsCache = snippets;
-  document.getElementById('snippet-path').textContent = data.path ? 'Stored locally at ' + data.path : '';
+  document.getElementById('snippet-path').textContent = data.path ? 'Stored on the cloud server at ' + data.path : '';
   if (!snippets.length) {
     list.innerHTML = '<div class="feed-empty">No snippets saved yet.</div>';
     return;
@@ -738,12 +928,12 @@ function renderSnippets(data) {
 
 async function loadSnippets() {
   try {
-    const response = await fetch(API + '/snippets');
+    const response = await apiFetch(API + '/snippets');
     if (!response.ok) throw new Error('Could not load snippets');
     renderSnippets(await response.json());
   } catch (error) {
     snippetsCache = [];
-    document.getElementById('snippet-list').innerHTML = '<div class="feed-empty">Start Hush, then open http://localhost:57327/ to manage snippets.</div>';
+    document.getElementById('snippet-list').innerHTML = '<div class="feed-empty">Could not load snippets. Check that Hush is running.</div>';
     document.getElementById('snippet-path').textContent = '';
   }
 }
@@ -760,7 +950,7 @@ document.getElementById('btn-add-snippet').addEventListener('click', async () =>
   const endpoint = isEditing ? API + '/snippets/' + editingSnippetIndex : API + '/snippets';
   let response;
   try {
-    response = await fetch(endpoint, {
+    response = await apiFetch(endpoint, {
       method: isEditing ? 'PUT' : 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name, shortcut, text}),
@@ -796,7 +986,7 @@ function editSnippet(index) {
 async function removeSnippet(index, version) {
   let response;
   try {
-    response = await fetch(API + '/snippets/' + index + '?version=' + encodeURIComponent(version), {method: 'DELETE'});
+    response = await apiFetch(API + '/snippets/' + index + '?version=' + encodeURIComponent(version), {method: 'DELETE'});
   } catch (error) {
     alert('Could not remove snippet. Check that Hush is running.');
     return;
@@ -812,7 +1002,7 @@ async function removeSnippet(index, version) {
 }
 
 async function deleteEntry(id, btn) {
-  await fetch(API+'/history/'+id, {method:'DELETE'});
+  await apiFetch(API+'/history/'+id, {method:'DELETE'});
   const card = btn.closest('.entry-card');
   card.style.opacity = '0';
   card.style.transition = 'opacity .2s';
@@ -841,7 +1031,7 @@ document.querySelectorAll('.level-card').forEach(card => {
     const level = card.dataset.level;
     setActiveLevel(level);
     try {
-      const response = await fetch(API+'/settings', {
+      const response = await apiFetch(API+'/settings', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({cleanup_level: level}),
       });
@@ -878,7 +1068,7 @@ document.getElementById('btn-cancel-hotkey').addEventListener('click', () => {
 document.getElementById('btn-save-hotkey').addEventListener('click', async () => {
   const key = document.getElementById('sel-hotkey').value;
   try {
-    const response = await fetch(API + '/settings', {
+    const response = await apiFetch(API + '/settings', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({hotkey: key}),
@@ -894,17 +1084,16 @@ document.getElementById('btn-save-hotkey').addEventListener('click', async () =>
 
 document.getElementById('btn-save-settings').addEventListener('click', async () => {
   const payload = {
-    asr_engine: document.getElementById('sel-engine').value,
     ollama_model: document.getElementById('sel-model').value,
   };
   try {
-    const response = await fetch(API+'/settings', {
+    const response = await apiFetch(API+'/settings', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload),
     });
     if (!response.ok) throw new Error((await response.json()).error || 'Could not save settings.');
     const result = await response.json();
-    document.getElementById('sel-engine').value = result.state?.asr_engine || payload.asr_engine;
+    document.getElementById('sel-engine').value = result.state?.asr_engine || 'whisper';
     document.getElementById('sel-model').value = result.state?.ollama_model || payload.ollama_model;
     document.getElementById('btn-save-settings').textContent = result.restart_required?.length
       ? '✓ Saved — restart Hush'
@@ -921,18 +1110,50 @@ function updateStatusDot(status) {
   txt.textContent = {idle:'Idle', recording:'Recording…', processing:'Processing…'}[status] || status;
 }
 
+function updateLiveSession(session) {
+  const meta = document.getElementById('live-session-meta');
+  const client = document.getElementById('live-session-client');
+  const transcript = document.getElementById('live-transcript');
+  if (!session || session.status === 'closed') {
+    meta.textContent = 'Waiting for a desktop client';
+    client.textContent = 'No active session';
+    return;
+  }
+  const seconds = Number(session.seconds || 0).toFixed(1);
+  meta.textContent = session.status === 'processing'
+    ? 'Preparing the final transcript'
+    : 'Receiving microphone audio · ' + seconds + 's';
+  client.textContent = session.client_id || 'Desktop client';
+  transcript.classList.remove('error');
+  if (session.partial) transcript.textContent = session.partial;
+}
+
 // ── SSE live events ──────────────────────────────────────────────── //
 let eventSource = null;
 let reconnectTimer = null;
 
 function connectSSE() {
   if (eventSource) eventSource.close();
-  eventSource = new EventSource(API + '/events');
+  eventSource = new EventSource(eventStreamUrl());
   const es = eventSource;
   es.onmessage = e => {
     try {
       const event = JSON.parse(e.data);
       if (event.type === 'status') updateStatusDot(event.value);
+      if (event.type === 'live_session') updateLiveSession(event.session);
+      if (event.type === 'partial_transcript') {
+        const transcript = document.getElementById('live-transcript');
+        transcript.classList.remove('error');
+        transcript.textContent = event.text || 'Listening...';
+      }
+      if (event.type === 'final_transcript') {
+        document.getElementById('live-transcript').textContent = event.text || 'No speech detected.';
+      }
+      if (event.type === 'session_error') {
+        const transcript = document.getElementById('live-transcript');
+        transcript.textContent = event.message || 'Cloud transcription failed.';
+        transcript.classList.add('error');
+      }
       if (event.type === 'new_entry') {
         if (!event.entry || event.entry.id == null || allEntries.some(entry => entry.id === event.entry.id)) return;
         allEntries.unshift(event.entry);
@@ -960,7 +1181,7 @@ connectSSE();
 // Poll status every 2s
 setInterval(async () => {
   try {
-    const s = await fetch(API+'/status').then(r=>r.json());
+    const s = await apiFetch(API+'/status').then(r=>r.json());
     updateStatusDot(s.status);
   } catch(e) {}
 }, 2000);

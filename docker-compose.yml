@@ -1,0 +1,79 @@
+name: hush
+
+services:
+  ollama:
+    image: ollama/ollama:0.35.0
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - hush-private
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  ollama-model-init:
+    image: ollama/ollama:0.35.0
+    platform: linux/amd64
+    restart: "no"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until ollama list >/dev/null 2>&1; do sleep 2; done
+        ollama pull "$${OLLAMA_MODEL}"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - hush-private
+
+  hush:
+    image: ${HUSH_IMAGE:-us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush:v1}
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    restart: unless-stopped
+    environment:
+      HUSH_ALLOWED_HOSTS: ${HUSH_ALLOWED_HOSTS:-localhost,127.0.0.1,::1}
+      HUSH_OLLAMA_BASE_URL: http://ollama:11434
+      HUSH_SERVER_MODE: cloud
+      HUSH_TEAM_TOKEN: ${HUSH_TEAM_TOKEN:?Set HUSH_TEAM_TOKEN in .env or the shell}
+      HF_HOME: /var/cache/hush/huggingface
+      XDG_CACHE_HOME: /var/cache/hush
+    ports:
+      - "57327:57327"
+    volumes:
+      - hush-data:/app/data
+      - whisper-cache:/var/cache/hush
+    depends_on:
+      ollama-model-init:
+        condition: service_completed_successfully
+    networks:
+      - hush-private
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:57327/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  hush-data:
+  ollama-models:
+  whisper-cache:
+
+networks:
+  hush-private:
+    driver: bridge

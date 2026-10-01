@@ -9,6 +9,8 @@ Usage:
 """
 
 import threading
+from collections.abc import Callable
+
 import numpy as np
 
 try:
@@ -36,6 +38,8 @@ class AudioRecorder:
         self._lock = threading.Lock()
         self._stream: sd.InputStream | None = None
         self._recording = False
+        self._on_chunk: Callable[[np.ndarray], None] | None = None
+        self._retain_audio = True
 
     # ------------------------------------------------------------------ #
     #  Internal sounddevice callback                                       #
@@ -47,8 +51,15 @@ class AudioRecorder:
             print(f"[audio] sounddevice status: {status}")
         if self._recording:
             # indata shape: (frames, channels) — copy to avoid reuse issues
-            with self._lock:
-                self._chunks.append(indata.copy())
+            chunk = indata.copy()
+            if self._retain_audio:
+                with self._lock:
+                    self._chunks.append(chunk)
+            if self._on_chunk is not None:
+                try:
+                    self._on_chunk(chunk)
+                except Exception as exc:
+                    print(f"[audio] Chunk delivery failed: {exc}")
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #
@@ -65,7 +76,12 @@ class AudioRecorder:
             callback=self._callback,
         )
 
-    def start(self):
+    def start(
+        self,
+        *,
+        on_chunk: Callable[[np.ndarray], None] | None = None,
+        retain_audio: bool = True,
+    ):
         """Open the input stream and begin collecting audio.
 
         Opens a fresh stream each time so the operating system can hand us the
@@ -77,6 +93,8 @@ class AudioRecorder:
         with self._lock:
             self._chunks = []
             self._recording = True
+            self._on_chunk = on_chunk
+            self._retain_audio = retain_audio
 
         # Resolve the current default input device name for logging
         try:
@@ -137,6 +155,7 @@ class AudioRecorder:
         with self._lock:
             chunks = list(self._chunks)
             self._chunks = []
+            self._on_chunk = None
 
         if not chunks:
             print("[audio] No audio chunks captured.")

@@ -25,9 +25,8 @@ cd Hush
 
 Claude, Codex, or another coding agent can perform the file, venv, dependency,
 config, model-download, and verification steps in this guide. In sandboxed agent
-environments, PyPI, Hugging Face, and Ollama access may require explicit network
-approval. DNS errors while installing packages or loading Parakeet usually mean
-network access is blocked, not that the dependency list is wrong.
+environments, PyPI, and Hugging Face access may require explicit network
+approval. The speech model is loaded on the VM, not the desktop.
 
 macOS privacy settings are the main manual step. A user must approve Input
 Monitoring, Accessibility, and Microphone access in System Settings; an agent can
@@ -53,11 +52,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 Install Homebrew first if needed: https://brew.sh
 
 ```bash
-brew install portaudio ollama python@3.12
+brew install portaudio python@3.12
 ```
 
-`portaudio` is required by `sounddevice`. `ollama` is used for local transcript
-cleanup. Python 3.12 is a good known-working runtime for this project.
+`portaudio` is required by `sounddevice`. Python 3.12 is a known-working runtime
+for the thin desktop client.
 
 ### Linux
 
@@ -78,7 +77,7 @@ On macOS, prefer Python 3.12 if available:
 
 ```bash
 uv venv --python 3.12 .venv
-uv sync --extra parakeet --no-dev
+uv sync --no-dev
 ```
 
 On Linux:
@@ -91,29 +90,17 @@ Notes:
 
 - `uv sync` creates or updates `.venv` and installs the exact versions recorded
   in `uv.lock`; no manual activation is required when using `uv run`.
-- `librosa` (0.10.x/0.11.x) is required for the Parakeet ASR path used on Apple
-  Silicon.
 - `setuptools<81` is required because `webrtcvad` still imports `pkg_resources`.
 - The `dev` dependency group contains pytest and is installed only for tests.
 - The `build` dependency group contains py2app and is installed only when
   creating a macOS application bundle.
 
-## 4. Set Up Ollama
+## 4. Prepare The Hush VM
 
-Start Ollama:
-
-```bash
-ollama serve
-```
-
-In a second terminal, pull the cleanup model:
-
-```bash
-ollama pull llama3.2:3b
-```
-
-Hush can still run without Ollama, but it will inject raw ASR text instead
-of cleaned text.
+Deploy the repository to the restricted GCP VM using
+[`deliverables/Hush_Milestone2_Runbook.md`](../deliverables/Hush_Milestone2_Runbook.md).
+The VM service must have `HUSH_TEAM_TOKEN` set in `/etc/hush.env`. Whisper,
+cleanup, snippets, the dashboard, and SQLite history all run on that VM.
 
 ## 5. Create Hush Config Files
 
@@ -135,6 +122,16 @@ engine = "auto"
 
 [injection]
 method = "auto"
+
+[cloud]
+base_url = "http://VM_PUBLIC_IP:57327"
+token = ""
+```
+
+Keep the shared token out of Git and provide it when launching the desktop:
+
+```bash
+HUSH_TEAM_TOKEN="YOUR_SHARED_TEAM_TOKEN" uv run --no-dev python -m voiceflow.app.main
 ```
 
 ## 6. macOS Privacy Permissions
@@ -243,28 +240,17 @@ Keyboard note: some macOS keyboards report Control as generic `Key.ctrl` instead
 of a side-specific key. The app treats `ctrl`, `ctrl_l`, and `ctrl_r` as
 equivalent, with `ctrl_l` as the default.
 
-## 8. Verify ASR Dependencies
+## 8. Verify The Cloud Server
 
-Parakeet on Apple Silicon:
-
-```bash
-uv run --no-dev --extra parakeet python -c 'from voiceflow.core.transcriber import create_transcriber; t=create_transcriber(engine="parakeet"); print(type(t).__name__)'
-```
-
-Expected:
-
-```text
-ParakeetTranscriber
-```
-
-The first run may download model files from Hugging Face and cache them under
-`~/.cache/huggingface/`.
-
-If Parakeet cannot start, the app falls back to Whisper:
+From an allowed team network, verify the VM dashboard and status endpoint:
 
 ```bash
-uv run --no-dev python -c 'from voiceflow.core.transcriber import create_transcriber; t=create_transcriber(engine="whisper"); print(type(t).__name__)'
+curl -fsS http://VM_PUBLIC_IP:57327/status
 ```
+
+Open `http://VM_PUBLIC_IP:57327/#token=YOUR_SHARED_TEAM_TOKEN` for protected
+dashboard changes. The fragment is removed by the page and is not sent in the
+initial HTTP request.
 
 ## 9. Run Tests
 
@@ -272,11 +258,7 @@ uv run --no-dev python -c 'from voiceflow.core.transcriber import create_transcr
 uv run --group dev pytest
 ```
 
-Expected:
-
-```text
-3 passed
-```
+All tests should pass.
 
 ## 10. Launch Hush
 
@@ -287,20 +269,22 @@ uv run --no-dev python -m voiceflow.app.main
 Expected startup signs:
 
 ```text
-[transcriber] Auto-selected engine: parakeet
 [main] Hotkey : ctrl_l
+[main] Cloud  : http://VM_PUBLIC_IP:57327
 [main] Dashboard : http://localhost:57327
-[main] Ready - hold hotkey to record, release to transcribe.
+[main] Ready - hold hotkey to stream, release to insert the final text.
 ```
 
 Hold Control, speak, then release. The terminal should show:
 
 ```text
-[main] STARTED
-[main] STOPPED - running pipeline...
+[main] RECORDING TO CLOUD
+[main] STOPPED - waiting for the cloud result...
+[main] FINAL: ...
 ```
 
-Then the app should transcribe and inject text into the focused input field.
+The VM dashboard should show partial text while speaking, then save the final
+entry. The desktop should insert only that final result into the focused field.
 
 ## 11. Troubleshooting
 
@@ -344,22 +328,12 @@ check:
 System Settings -> Privacy & Security -> Microphone
 ```
 
-### Parakeet Falls Back To Whisper
+### Cloud Connection Fails
 
-Synchronize the optional ASR dependencies again:
-
-```bash
-uv sync --extra parakeet --no-dev
-```
-
-Then run:
-
-```bash
-uv run --no-dev --extra parakeet python -c 'import librosa; print(librosa.__version__)'
-```
-
-If model files are missing, rerun the Parakeet check from section 8 with network
-access.
+Confirm the VM is running, your current public IPv4 address is present as a
+`/32` source in `hush-team-ingress`, port `57327` is listening, and the desktop
+and VM use the same `HUSH_TEAM_TOKEN`. Hush deliberately does not fall back to
+local transcription.
 
 ### `webrtcvad` Warns About `pkg_resources`
 
@@ -370,9 +344,9 @@ Synchronize the locked environment if the warning becomes an import error:
 uv sync --no-dev
 ```
 
-### Ollama Is Unreachable
+### VM Cleanup Is Unavailable
 
-Start Ollama:
+If Ollama is part of the VM setup, start and inspect it on the VM:
 
 ```bash
 ollama serve
