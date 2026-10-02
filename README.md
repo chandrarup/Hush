@@ -15,8 +15,10 @@ docker compose ps
 curl -fsS http://127.0.0.1:57327/status
 ```
 
-Compose starts Hush, Ollama, and a one-time model initialization service. Hush
-data, the Whisper download cache, and Ollama models use named volumes. See
+The default Compose profile starts only Hush. Hush data and the Whisper download
+cache use named volumes. Ollama remains an optional experiment profile and is
+not used by the 20 GB Milestone 3 VM deployment. Start it later with
+`docker compose --profile ollama up -d` when the host has enough disk space. See
 [`deliverables/Hush_Milestone3_Runbook.md`](deliverables/Hush_Milestone3_Runbook.md)
 for Artifact Registry and VM deployment commands. Never commit `.env`.
 
@@ -73,7 +75,7 @@ reinstall, and troubleshooting flow.
 |-----------|---------|
 | Python 3.10+ | Runtime |
 | [uv](https://docs.astral.sh/uv/) | Application environment and dependency manager |
-| Hush VM | Whisper, cleanup, snippets, dashboard, and SQLite history |
+| Hush VM | Whisper, snippets, dashboard, and SQLite history; raw transcript fallback without Ollama |
 | Shared team token | Authenticates desktop WebSocket sessions and dashboard changes |
 | PortAudio | Audio I/O backend |
 | xdotool (Linux) | Text injection |

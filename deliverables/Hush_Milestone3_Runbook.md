@@ -44,7 +44,7 @@ docker compose ps
 ```
 
 Do not run `docker compose down --volumes`; that deletes the evidence data and
-downloaded models.
+downloaded Whisper model.
 
 ## 2. Secret verification
 
@@ -123,13 +123,14 @@ docker-compose.yml
 ```
 
 On the VM, set `HUSH_ALLOWED_HOSTS` in `.env` to include the current external IP.
-Then pull and run the published artifact:
+Then pull and run only the published Hush artifact. The existing 20 GB VM does
+not run the optional Ollama profile:
 
 ```bash
 cd ~/hush-container
 gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-docker compose pull
-docker compose up -d --no-build
+docker compose pull hush
+docker compose up -d --no-build --no-deps hush
 docker compose ps
 curl -fsS http://127.0.0.1:57327/status
 docker image inspect \

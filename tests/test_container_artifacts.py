@@ -18,12 +18,19 @@ def test_compose_declares_private_services_and_persistent_volumes():
     compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
 
     assert "ollama/ollama:0.35.0" in compose
-    assert "service_completed_successfully" in compose
+    assert 'profiles: ["ollama"]' in compose
     assert "linux/amd64" in compose
     assert "hush-data:/app/data" in compose
     assert "whisper-cache:/var/cache/hush" in compose
     assert "ollama-models:/root/.ollama" in compose
     assert "replace-with-a-long-random-team-token" not in compose
+
+
+def test_default_compose_profile_does_not_require_ollama():
+    compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    hush_service = compose.split("  hush:\n", maxsplit=1)[1].split("\nvolumes:", maxsplit=1)[0]
+
+    assert "depends_on:" not in hush_service
 
 
 def test_dockerignore_excludes_runtime_data_and_secrets():
