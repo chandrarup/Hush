@@ -7,7 +7,8 @@ Serves:
   GET  /              → dashboard HTML
   GET  /history       → transcription entries (JSON)
   GET  /stats         → word count, wpm, days
-  GET  /status        → app state (recording/idle, cleanup level, etc.)
+  GET  /health        → unauthenticated container health probe
+  GET  /status        → authenticated app state
   POST /transcribe    → transcribe a browser-uploaded WAV file
   POST /settings      → update cleanup level, hotkey display name
   DELETE /history     → clear all history
@@ -188,6 +189,17 @@ def _team_token() -> str:
     return os.getenv("HUSH_TEAM_TOKEN", "").strip()
 
 
+def _cloud_mode_enabled() -> bool:
+    """Return whether this process is the remotely exposed cloud service."""
+    return os.getenv("HUSH_SERVER_MODE", "").strip().lower() == "cloud"
+
+
+def _validate_cloud_configuration() -> None:
+    """Fail closed when a remotely exposed service has no authentication token."""
+    if _cloud_mode_enabled() and not _team_token():
+        raise RuntimeError("HUSH_TEAM_TOKEN is required when HUSH_SERVER_MODE=cloud.")
+
+
 def _token_matches(provided: str | None) -> bool:
     expected = _team_token()
     return bool(expected and provided and hmac.compare_digest(provided, expected))
@@ -200,9 +212,14 @@ def _request_token(request: Any) -> str | None:
     return None
 
 
-def _mutation_token_is_valid(request: Any) -> bool:
-    """Require the configured token on mutations; loopback dev stays token-free."""
+def _request_token_is_valid(request: Any) -> bool:
+    """Require the configured token when present; loopback development stays token-free."""
     return not _team_token() or _token_matches(_request_token(request))
+
+
+def _is_public_http_path(path: str) -> bool:
+    """Keep only the dashboard shell, static assets, and health probe public."""
+    return path in {"/", "/health"} or path.startswith("/ui/")
 
 
 def _request_origin_is_trusted(request: Any) -> bool:
@@ -331,21 +348,22 @@ if _FASTAPI_OK:
     _UI_DIR = _source_ui_dir if _source_ui_dir.exists() else _bundle_ui_dir
 
     @app.middleware("http")
-    async def _require_same_origin_for_mutations(request: Request, call_next):
-        """Reject untrusted hosts, cross-origin writes, and bad team tokens."""
+    async def _require_authenticated_api(request: Request, call_next):
+        """Reject untrusted hosts, unauthenticated APIs, and cross-origin writes."""
         request_host = urlsplit(f"//{request.headers.get('host', '')}").hostname
         if not request_host or request_host.lower() not in _allowed_web_hosts():
             return JSONResponse({"error": "Untrusted host."}, status_code=403)
+        if not _is_public_http_path(request.url.path) and not _request_token_is_valid(request):
+            return JSONResponse({"error": "Invalid or missing team token."}, status_code=401)
         if request.method in {"POST", "PUT", "PATCH", "DELETE"}:
             if not _request_origin_is_trusted(request):
                 return JSONResponse({"error": "Cross-origin request rejected."}, status_code=403)
-            if not _mutation_token_is_valid(request):
-                return JSONResponse({"error": "Invalid or missing team token."}, status_code=401)
         return await call_next(request)
 
     @app.on_event("startup")
     async def _startup():
         global _event_loop
+        _validate_cloud_configuration()
         _event_loop = asyncio.get_running_loop()
         if _history_enabled:
             _history.init_db()
@@ -373,6 +391,10 @@ if _FASTAPI_OK:
         return JSONResponse({"error": "Not found"}, status_code=404)
 
     # ── REST endpoints ──────────────────────────────────────────── #
+
+    @app.get("/health")
+    async def get_health():
+        return {"status": "ok"}
 
     @app.get("/history")
     async def get_history(limit: int = 200, offset: int = 0):

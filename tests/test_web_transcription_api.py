@@ -222,5 +222,7 @@ def test_browser_pages_use_same_origin_api():
     assert "API + '/transcribe'" in index_html
     assert 'onclick="copyText' not in index_html
     assert 'class="btn primary copy-clean"' in index_html
+    assert "new EventSource" not in index_html
+    assert "apiFetch(API + '/events'" in index_html
     assert "http://localhost:57327" not in index_html
     assert "http://localhost:57327" not in onboarding_html

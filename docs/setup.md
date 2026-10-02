@@ -242,15 +242,17 @@ equivalent, with `ctrl_l` as the default.
 
 ## 8. Verify The Cloud Server
 
-From an allowed team network, verify the VM dashboard and status endpoint:
+From an allowed team network, verify the VM's public health endpoint:
 
 ```bash
-curl -fsS http://VM_PUBLIC_IP:57327/status
+curl -fsS http://VM_PUBLIC_IP:57327/health
 ```
 
-Open `http://VM_PUBLIC_IP:57327/#token=YOUR_SHARED_TEAM_TOKEN` for protected
-dashboard changes. The fragment is removed by the page and is not sent in the
-initial HTTP request.
+Open `http://VM_PUBLIC_IP:57327/#token=YOUR_SHARED_TEAM_TOKEN` for the protected
+dashboard APIs and live event stream. The fragment is removed by the page and
+is not sent in the initial HTTP request. Direct HTTP is limited to the
+firewall-restricted classroom demo; use a TLS reverse proxy and an `https://`
+cloud URL for any public or production deployment.
 
 ## 9. Run Tests
 

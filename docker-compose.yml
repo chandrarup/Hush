@@ -62,7 +62,7 @@ services:
     networks:
       - hush-private
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:57327/status"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:57327/health"]
       interval: 15s
       timeout: 5s
       retries: 5

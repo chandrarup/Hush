@@ -50,6 +50,6 @@ USER hush
 EXPOSE 57327
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
-    CMD curl --fail --silent http://127.0.0.1:57327/status >/dev/null || exit 1
+    CMD curl --fail --silent http://127.0.0.1:57327/health >/dev/null || exit 1
 
 CMD ["uvicorn", "voiceflow.web.api_server:app", "--host", "0.0.0.0", "--port", "57327", "--no-access-log"]

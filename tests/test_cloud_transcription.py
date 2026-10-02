@@ -120,6 +120,40 @@ def test_cloud_dashboard_mutations_require_team_token(monkeypatch):
     assert accepted.status_code == 200
 
 
+def test_cloud_dashboard_reads_require_team_token_but_health_is_public(monkeypatch):
+    monkeypatch.setenv("HUSH_TEAM_TOKEN", "test-team-token")
+    monkeypatch.setattr(api_server, "_history_enabled", False)
+    headers = {"Host": "test"}
+
+    with TestClient(api_server.app) as client:
+        health = client.get("/health", headers=headers)
+        missing_history = client.get("/history", headers=headers)
+        missing_status = client.get("/status", headers=headers)
+        accepted_history = client.get(
+            "/history",
+            headers={**headers, "Authorization": "Bearer test-team-token"},
+        )
+        accepted_status = client.get(
+            "/status",
+            headers={**headers, "Authorization": "Bearer test-team-token"},
+        )
+
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok"}
+    assert missing_history.status_code == 401
+    assert missing_status.status_code == 401
+    assert accepted_history.status_code == 200
+    assert accepted_status.status_code == 200
+
+
+def test_cloud_mode_requires_team_token(monkeypatch):
+    monkeypatch.setenv("HUSH_SERVER_MODE", "cloud")
+    monkeypatch.delenv("HUSH_TEAM_TOKEN", raising=False)
+
+    with pytest.raises(RuntimeError, match="HUSH_TEAM_TOKEN is required"):
+        api_server._validate_cloud_configuration()
+
+
 def test_local_dashboard_mode_does_not_initialize_or_return_history(monkeypatch):
     monkeypatch.setattr(api_server, "_history_enabled", False)
     monkeypatch.setattr(

@@ -11,6 +11,7 @@ def test_dockerfile_runs_as_non_root_cloud_service():
     assert "USER hush" in dockerfile
     assert '"--host", "0.0.0.0"' in dockerfile
     assert '"--port", "57327"' in dockerfile
+    assert "http://127.0.0.1:57327/health" in dockerfile
     assert "HUSH_TEAM_TOKEN" not in dockerfile
 
 
@@ -23,6 +24,7 @@ def test_compose_declares_private_services_and_persistent_volumes():
     assert "hush-data:/app/data" in compose
     assert "whisper-cache:/var/cache/hush" in compose
     assert "ollama-models:/root/.ollama" in compose
+    assert "http://127.0.0.1:57327/health" in compose
     assert "replace-with-a-long-random-team-token" not in compose
 
 

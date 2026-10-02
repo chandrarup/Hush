@@ -615,10 +615,6 @@ function apiFetch(url, options = {}) {
   return fetch(url, {...options, headers});
 }
 
-function eventStreamUrl() {
-  return API + '/events';
-}
-
 // ── Theme ────────────────────────────────────────────────────────── //
 const THEME_STORAGE_KEY = 'voiceflow-theme';
 const themeToggle = document.getElementById('theme-toggle');
@@ -1129,55 +1125,88 @@ function updateLiveSession(session) {
 }
 
 // ── SSE live events ──────────────────────────────────────────────── //
-let eventSource = null;
+let eventController = null;
 let reconnectTimer = null;
 
-function connectSSE() {
-  if (eventSource) eventSource.close();
-  eventSource = new EventSource(eventStreamUrl());
-  const es = eventSource;
-  es.onmessage = e => {
-    try {
-      const event = JSON.parse(e.data);
-      if (event.type === 'status') updateStatusDot(event.value);
-      if (event.type === 'live_session') updateLiveSession(event.session);
-      if (event.type === 'partial_transcript') {
-        const transcript = document.getElementById('live-transcript');
-        transcript.classList.remove('error');
-        transcript.textContent = event.text || 'Listening...';
+function handleServerEvent(event) {
+  if (event.type === 'status') updateStatusDot(event.value);
+  if (event.type === 'live_session') updateLiveSession(event.session);
+  if (event.type === 'partial_transcript') {
+    const transcript = document.getElementById('live-transcript');
+    transcript.classList.remove('error');
+    transcript.textContent = event.text || 'Listening...';
+  }
+  if (event.type === 'final_transcript') {
+    document.getElementById('live-transcript').textContent = event.text || 'No speech detected.';
+  }
+  if (event.type === 'session_error') {
+    const transcript = document.getElementById('live-transcript');
+    transcript.textContent = event.message || 'Cloud transcription failed.';
+    transcript.classList.add('error');
+  }
+  if (event.type === 'new_entry') {
+    if (!event.entry || event.entry.id == null || allEntries.some(entry => entry.id === event.entry.id)) return;
+    allEntries.unshift(event.entry);
+    // Prepend to live feed if on home
+    if (document.getElementById('page-home').classList.contains('active')) {
+      renderFeed(allEntries, document.getElementById('home-feed'), 30);
+    }
+  }
+}
+
+function scheduleSSEReconnect(controller) {
+  if (eventController === controller) eventController = null;
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectSSE();
+  }, 3000);
+}
+
+async function connectSSE() {
+  if (eventController) eventController.abort();
+  const controller = new AbortController();
+  eventController = controller;
+  try {
+    const response = await apiFetch(API + '/events', {
+      headers: {'Accept': 'text/event-stream'},
+      signal: controller.signal,
+    });
+    if (!response.ok || !response.body) throw new Error('Live event stream unavailable.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (!controller.signal.aborted) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true}).replace(/\r\n/g, '\n');
+      let boundary;
+      while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        const payload = frame.split('\n')
+          .filter(line => line.startsWith('data:'))
+          .map(line => line.slice(5).trimStart())
+          .join('\n');
+        if (!payload) continue;
+        try {
+          handleServerEvent(JSON.parse(payload));
+        } catch(err) { /* ignore malformed event payloads */ }
       }
-      if (event.type === 'final_transcript') {
-        document.getElementById('live-transcript').textContent = event.text || 'No speech detected.';
-      }
-      if (event.type === 'session_error') {
-        const transcript = document.getElementById('live-transcript');
-        transcript.textContent = event.message || 'Cloud transcription failed.';
-        transcript.classList.add('error');
-      }
-      if (event.type === 'new_entry') {
-        if (!event.entry || event.entry.id == null || allEntries.some(entry => entry.id === event.entry.id)) return;
-        allEntries.unshift(event.entry);
-        // Prepend to live feed if on home
-        if (document.getElementById('page-home').classList.contains('active')) {
-          renderFeed(allEntries, document.getElementById('home-feed'), 30);
-        }
-      }
-    } catch(err) { /* ignore parse errors */ }
-  };
-  es.onerror = () => {
-    es.close();
-    if (eventSource === es) eventSource = null;
-    if (reconnectTimer) return;
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = null;
-      connectSSE();
-    }, 3000);
-  };
+    }
+  } catch(err) {
+    if (err.name === 'AbortError') return;
+  }
+  if (!controller.signal.aborted) scheduleSSEReconnect(controller);
 }
 
 // ── Boot ─────────────────────────────────────────────────────────── //
 loadHome();
 connectSSE();
+window.addEventListener('beforeunload', () => {
+  if (eventController) eventController.abort();
+});
 // Poll status every 2s
 setInterval(async () => {
   try {

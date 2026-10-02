@@ -12,7 +12,7 @@ cp .env.example .env
 docker compose build hush
 docker compose up -d
 docker compose ps
-curl -fsS http://127.0.0.1:57327/status
+curl -fsS http://127.0.0.1:57327/health
 ```
 
 The default Compose profile starts only Hush. Hush data and the Whisper download
@@ -76,7 +76,7 @@ reinstall, and troubleshooting flow.
 | Python 3.10+ | Runtime |
 | [uv](https://docs.astral.sh/uv/) | Application environment and dependency manager |
 | Hush VM | Whisper, snippets, dashboard, and SQLite history; raw transcript fallback without Ollama |
-| Shared team token | Authenticates desktop WebSocket sessions and dashboard changes |
+| Shared team token | Authenticates desktop WebSocket sessions and protected dashboard APIs |
 | PortAudio | Audio I/O backend |
 | xdotool (Linux) | Text injection |
 
@@ -140,6 +140,10 @@ HUSH_TEAM_TOKEN="YOUR_SHARED_TEAM_TOKEN" uv run --no-dev python -m voiceflow.app
 ```
 
 The VM firewall must still restrict TCP `57327` to the team public IP addresses.
+The direct `http://` and `ws://` connection is only appropriate for the
+restricted classroom demo network. For a public or production deployment,
+terminate TLS in front of Hush and configure an `https://` cloud URL so browser
+and desktop traffic use HTTPS/WSS.
 
 ### 4. Launch Hush
 
