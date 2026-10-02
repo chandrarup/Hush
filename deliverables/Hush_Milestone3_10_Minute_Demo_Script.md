@@ -9,8 +9,9 @@ do not read commands aloud. Keep the team token hidden.
 
 “Hush now separates the native Mac client from a repeatable Linux cloud stack.
 The client still handles the microphone, hotkey, and text insertion. Docker
-Compose starts the Hush API, Ollama cleanup, and one-time model setup. Hush data,
-the Whisper cache, and Ollama models persist in named volumes.”
+Compose starts the versioned Hush API. Hush history and the Whisper cache
+persist in named volumes. This VM uses the Hush-only profile, so it returns the
+raw Whisper transcript without an Ollama cleanup service.”
 
 Paste:
 
@@ -26,7 +27,7 @@ Python packages or configure the application manually on each machine.”
 
 **Screen:** `http://localhost:57327`, then terminal.
 
-Record or upload a short audio sample. Show the cleaned result and history.
+Record or upload a short audio sample. Show the transcript and history.
 
 “This is the full cloud side of Hush running locally on port 57327. The history
 survives container recreation because it lives in the Hush data volume.”
@@ -63,8 +64,8 @@ also inspected the image environment, history, and filesystem before pushing.”
 Paste:
 
 ```bash
-docker compose pull
-docker compose up -d --no-build
+docker compose pull hush
+docker compose up -d --no-build --no-deps hush
 docker compose ps
 curl -fsS http://127.0.0.1:57327/status
 docker image inspect "$HUSH_IMAGE" \
@@ -72,8 +73,8 @@ docker image inspect "$HUSH_IMAGE" \
 ```
 
 “The VM pulled `v1` instead of rebuilding it. The digest matches Artifact
-Registry and the local artifact. Compose reports the same services and Hush is
-healthy on the same port used in Milestone 2.”
+Registry and the local artifact. Compose reports Hush healthy on the same port
+used in Milestone 2.”
 
 **Screen:** `http://VM_PUBLIC_IP:57327`, complete one transcription, then Slide 2.
 
@@ -87,7 +88,7 @@ command. Containerization solved environment drift for our team.”
 **Screen:** Slide 2 or final checklist.
 
 “We demonstrated Docker Compose locally, the `v1` registry artifact, identical
-digests, the same application on the VM URL, runtime-only secrets, persistent
-data, and active budget controls. Our repository includes the Dockerfile,
+digests, the same Hush application on the VM URL, runtime-only secrets,
+persistent data, and active budget controls. Our repository includes the Dockerfile,
 Compose file, and `.dockerignore`. After recording, we stop the VM to control
 cost.”

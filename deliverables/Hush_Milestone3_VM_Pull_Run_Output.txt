@@ -1,0 +1,51 @@
+Hush Milestone 3 - VM Pull and Run Evidence
+Captured: 2026-10-02
+Project: hush-milestone-2-20260922
+VM: hush-vm (us-central1-a)
+Public URL at capture time: http://104.198.149.120:57327/
+
+$ docker compose config --services
+hush
+
+$ docker compose pull hush
+[+] Pulling 1/1
+ ✔ hush Pulled
+
+$ docker compose up -d --no-build --no-deps hush
+[+] Running 1/1
+ ✔ Container hush-hush-1 Started
+
+$ docker compose ps
+NAME          IMAGE                                                                          COMMAND                  SERVICE   STATUS                  PORTS
+hush-hush-1   us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush:v1   "uvicorn voiceflow.w…"   hush      Up (healthy)            0.0.0.0:57327->57327/tcp, [::]:57327->57327/tcp
+
+$ docker image inspect us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush:v1 --format '{{index .RepoDigests 0}}'
+us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:c00fb84a421cb16e36d12bfd2897df0a942e75da0b5b7f10b0d9b2b3d7038d0b
+
+$ docker image inspect us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush:v1 --format '{{.Os}}/{{.Architecture}} user={{.Config.User}}'
+linux/amd64 user=hush
+
+$ curl -fsS http://127.0.0.1:57327/status
+{"status":"idle","cleanup_level":"light","hotkey":"ctrl_l","asr_engine":"whisper","ollama_model":"llama3.2:3b","web_model":"base.en","live_sessions":[]}
+
+$ curl -fsS http://104.198.149.120:57327/status
+{"status":"idle","cleanup_level":"light","hotkey":"ctrl_l","asr_engine":"whisper","ollama_model":"llama3.2:3b","web_model":"base.en","live_sessions":[]}
+
+Persistence verification:
+1. Wrote "vm-persistence-ok" to /app/data/milestone3-persistence-check.
+2. Force-recreated the Hush container without deleting named volumes.
+3. Read the same value back from the recreated container.
+
+Result: vm-persistence-ok
+
+Digest comparison:
+- Local Hush image:     sha256:c00fb84a421cb16e36d12bfd2897df0a942e75da0b5b7f10b0d9b2b3d7038d0b
+- Artifact Registry v1: sha256:c00fb84a421cb16e36d12bfd2897df0a942e75da0b5b7f10b0d9b2b3d7038d0b
+- VM Hush image:        sha256:c00fb84a421cb16e36d12bfd2897df0a942e75da0b5b7f10b0d9b2b3d7038d0b
+
+The three references are the same immutable Hush application artifact.
+
+Deployment note:
+The existing 20 GB VM runs the default Hush-only Compose profile. The optional
+Ollama profile is not running on this VM. Transcription and persistent history
+remain available; LLM cleanup falls back to the raw Whisper transcript.

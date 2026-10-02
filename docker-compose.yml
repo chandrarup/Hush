@@ -3,6 +3,7 @@ name: hush
 services:
   ollama:
     image: ollama/ollama:0.35.0
+    profiles: ["ollama"]
     platform: linux/amd64
     restart: unless-stopped
     environment:
@@ -20,6 +21,7 @@ services:
 
   ollama-model-init:
     image: ollama/ollama:0.35.0
+    profiles: ["ollama"]
     platform: linux/amd64
     restart: "no"
     environment:
@@ -57,9 +59,6 @@ services:
     volumes:
       - hush-data:/app/data
       - whisper-cache:/var/cache/hush
-    depends_on:
-      ollama-model-init:
-        condition: service_completed_successfully
     networks:
       - hush-private
     healthcheck:

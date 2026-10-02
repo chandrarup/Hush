@@ -15,9 +15,9 @@ and digest labels.
 - [ ] 09 `hush-team-ingress`, port 57327, team `/32` ranges
 - [ ] 10 VM terminal pulling `v1`
 - [ ] 11 VM digest matching Artifact Registry
-- [ ] 12 VM `docker compose ps` with healthy services
+- [ ] 12 VM `docker compose ps` with the Hush service healthy
 - [ ] 13 VM `/status` response and port mapping
 - [ ] 14 Hush dashboard at the Milestone 2 VM URL
-- [ ] 15 VM-hosted completed transcription and cleanup
+- [ ] 15 VM-hosted completed transcription and persistent history entry
 - [ ] 16 Final pull/run terminal output
 - [ ] 17 Optional stopped VM proof
