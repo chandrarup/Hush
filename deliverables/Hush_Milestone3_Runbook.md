@@ -29,7 +29,7 @@ docker compose config --quiet
 docker compose build hush
 docker compose up -d
 docker compose ps
-curl -fsS http://127.0.0.1:57327/status
+curl -fsS http://127.0.0.1:57327/health
 docker image inspect "$HUSH_IMAGE" \
   --format 'ID={{.Id}} SIZE={{.Size}} ARCH={{.Architecture}} USER={{.Config.User}}'
 ```
@@ -99,6 +99,10 @@ thresholds are $10, $25, and $50.
 Confirm `hush-team-ingress` allows TCP `57327` only from current team `/32`
 addresses. Never use `0.0.0.0/0` for the demo.
 
+The milestone's direct HTTP connection is acceptable only for this restricted
+classroom demo. A public or production deployment must terminate TLS in front
+of Hush and use HTTPS/WSS.
+
 ## 5. VM migration
 
 Start `hush-vm`, note its current external IP, and connect with direct SSH. Back
@@ -132,7 +136,7 @@ gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 docker compose pull hush
 docker compose up -d --no-build --no-deps hush
 docker compose ps
-curl -fsS http://127.0.0.1:57327/status
+curl -fsS http://127.0.0.1:57327/health
 docker image inspect \
   us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush:v1 \
   --format 'ID={{.Id}} REPO_DIGESTS={{json .RepoDigests}} ARCH={{.Architecture}}'
