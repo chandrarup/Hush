@@ -41,6 +41,22 @@ def post_audio(payload: bytes, *, include_origin: bool = True):
     return asyncio.run(exercise())
 
 
+def test_cloud_whisper_runtime_configuration(monkeypatch):
+    monkeypatch.setenv("HUSH_WHISPER_MODEL", "tiny.en")
+    monkeypatch.setenv("HUSH_WHISPER_BEAM_SIZE", "1")
+
+    assert api_server._configured_whisper_model() == "tiny.en"
+    assert api_server._configured_whisper_beam_size() == 1
+
+
+def test_cloud_whisper_beam_size_is_bounded(monkeypatch):
+    monkeypatch.setenv("HUSH_WHISPER_BEAM_SIZE", "99")
+    assert api_server._configured_whisper_beam_size() == 10
+
+    monkeypatch.setenv("HUSH_WHISPER_BEAM_SIZE", "invalid")
+    assert api_server._configured_whisper_beam_size() == 5
+
+
 def test_static_file_route_rejects_paths_outside_ui_directory():
     async def exercise():
         transport = httpx.ASGITransport(app=api_server.app)
