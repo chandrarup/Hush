@@ -191,6 +191,7 @@ def create_transcriber(
     language: str = "en",
     compute_type_gpu: str = "float16",
     compute_type_cpu: str = "int8",
+    beam_size: int = 5,
 ):
     """
     Create the best available transcriber based on engine config.
@@ -221,4 +222,5 @@ def create_transcriber(
         language=language,
         compute_type_gpu=compute_type_gpu,
         compute_type_cpu=compute_type_cpu,
+        beam_size=beam_size,
     )

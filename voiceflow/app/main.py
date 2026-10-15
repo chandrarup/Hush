@@ -44,6 +44,7 @@ _hotkey_pressed         = False
 _captured_context: dict = {}
 _session_lock           = threading.Lock()
 _listener               = None   # pynput Listener — kept alive in thread
+_recording_generation   = 0      # Distinguishes consecutive watchdog threads.
 
 
 # ──────────────────────────────────────────────────────────────────── #
@@ -245,12 +246,128 @@ def _finish_cloud_session(session: CloudTranscriptionSession) -> None:
         _api.push_event({"type": "status", "value": "idle"})
 
 
+def _virtual_key_code(key) -> int | None:
+    """Return pynput's native virtual-key code when the backend exposes one."""
+    value = getattr(key, "value", key)
+    virtual_key = getattr(value, "vk", None)
+    return virtual_key if isinstance(virtual_key, int) else None
+
+
+def _macos_key_is_pressed(virtual_key: int) -> bool | None:
+    """Read physical key state independently of the event-tap release callback."""
+    if _platform.name != "macOS":
+        return None
+    try:
+        from Quartz import CGEventSourceKeyState, kCGEventSourceStateCombinedSessionState
+
+        return bool(
+            CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState, virtual_key)
+        )
+    except Exception:
+        return None
+
+
+def _watch_for_hotkey_release(
+    virtual_key: int,
+    generation: int,
+    poll_seconds: float = 0.1,
+) -> None:
+    """Recover when macOS drops a pynput key-release event.
+
+    Two consecutive native "up" readings avoid treating a transient state read
+    as a release. Normal releases still use ``_on_release`` immediately.
+    """
+    consecutive_up_reads = 0
+    while True:
+        time.sleep(poll_seconds)
+        with _session_lock:
+            if not _hotkey_pressed or generation != _recording_generation:
+                return
+
+        is_pressed = _macos_key_is_pressed(virtual_key)
+        if is_pressed is None:
+            return
+        if is_pressed:
+            consecutive_up_reads = 0
+            continue
+
+        consecutive_up_reads += 1
+        if consecutive_up_reads >= 2:
+            print("[main] Recovered a missed hotkey release from native key state.")
+            _stop_recording(expected_generation=generation)
+            return
+
+
+def _start_release_watchdog(key, generation: int) -> None:
+    """Start the macOS missed-release guard when a native key code is available."""
+    virtual_key = _virtual_key_code(key)
+    if virtual_key is None or _macos_key_is_pressed(virtual_key) is None:
+        return
+    threading.Thread(
+        target=_watch_for_hotkey_release,
+        args=(virtual_key, generation),
+        daemon=True,
+        name="hotkey-release-watchdog",
+    ).start()
+
+
+def _stop_recording(expected_generation: int | None = None) -> bool:
+    """Atomically leave recording state and finalize or safely abort the session."""
+    global _hotkey_pressed, _cloud_session
+
+    with _session_lock:
+        if not _hotkey_pressed:
+            return False
+        if expected_generation is not None and expected_generation != _recording_generation:
+            return False
+        _hotkey_pressed = False
+        session = _cloud_session
+
+    print("[main] STOPPED — waiting for the cloud result...")
+    tray = _platform.tray.get_tray()
+    # Move the native HUD out of Listening before any potentially slow I/O.
+    tray.set_state("processing")
+    _api.push_event({"type": "status", "value": "processing"})
+
+    try:
+        if not _recorder:
+            raise RuntimeError("The microphone recorder is unavailable.")
+        _recorder.stop()
+    except Exception as exc:
+        print(f"[main] Could not stop dictation cleanly: {exc}")
+        if session is not None:
+            try:
+                session.abort()
+            except Exception:
+                pass
+        with _session_lock:
+            if _cloud_session is session:
+                _cloud_session = None
+        tray.set_state("idle")
+        _api.push_event({"type": "session_error", "message": str(exc)})
+        _api.push_event({"type": "status", "value": "idle"})
+        return True
+
+    if session is None:
+        tray.set_state("idle")
+        _api.push_event({"type": "status", "value": "idle"})
+        return True
+
+    threading.Thread(
+        target=_finish_cloud_session,
+        args=(session,),
+        daemon=True,
+        name="cloud-finalize",
+    ).start()
+    return True
+
+
 # ──────────────────────────────────────────────────────────────────── #
 #  Hotkey callbacks                                                     #
 # ──────────────────────────────────────────────────────────────────── #
 
 def _on_press(key):
-    global _hotkey_pressed, _captured_context, _cloud_session
+    global _hotkey_pressed, _captured_context, _cloud_session, _recording_generation
     if not _keys_match(key, _hotkey_target) or _hotkey_pressed:
         return
 
@@ -262,6 +379,7 @@ def _on_press(key):
     _captured_context  = _platform.context.get_active_context()
     app_name = _captured_context.get("app", "unknown")
     is_ai    = _captured_context.get("is_ai_chat", False)
+    session = None
     try:
         session = _create_cloud_session(_captured_context).start()
         if not _recorder:
@@ -269,6 +387,16 @@ def _on_press(key):
             raise CloudTranscriptionError("The microphone recorder is unavailable.")
         _recorder.start(on_chunk=session.send_audio, retain_audio=False)
     except (CloudTranscriptionError, RuntimeError) as exc:
+        if session is not None:
+            try:
+                session.abort()
+            except Exception:
+                pass
+        if _recorder and _recorder.is_recording:
+            try:
+                _recorder.stop()
+            except Exception:
+                pass
         print(f"[main] Cannot start cloud dictation: {exc}")
         _api.push_event({"type": "session_error", "message": str(exc)})
         _api.push_event({"type": "status", "value": "idle"})
@@ -277,35 +405,19 @@ def _on_press(key):
 
     with _session_lock:
         _cloud_session = session
-    _hotkey_pressed = True
+        _hotkey_pressed = True
+        _recording_generation += 1
+        generation = _recording_generation
     print(f"[main] RECORDING TO CLOUD  app='{app_name}'" + (" [AI chat]" if is_ai else ""))
     _platform.tray.get_tray().set_state("recording")
     _api.push_event({"type": "status", "value": "recording"})
+    _start_release_watchdog(key, generation)
 
 
 def _on_release(key):
-    global _hotkey_pressed
     if not _keys_match(key, _hotkey_target) or not _hotkey_pressed:
         return
-
-    _hotkey_pressed = False
-    print("[main] STOPPED — waiting for the cloud result...")
-    _api.push_event({"type": "status", "value": "processing"})
-
-    if not _recorder:
-        return
-
-    _recorder.stop()
-    with _session_lock:
-        session = _cloud_session
-    if session is None:
-        _api.push_event({"type": "status", "value": "idle"})
-        return
-
-    threading.Thread(
-        target=_finish_cloud_session, args=(session,),
-        daemon=True, name="cloud-finalize"
-    ).start()
+    _stop_recording()
 
 
 # ──────────────────────────────────────────────────────────────────── #

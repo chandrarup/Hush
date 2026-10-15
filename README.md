@@ -152,7 +152,10 @@ uv run --no-dev python -m voiceflow.app.main
 ```
 
 The desktop does not load or download a speech model. The VM downloads and
-caches `faster-whisper` `base.en` on its first transcription request.
+caches the configured `faster-whisper` model on its first transcription request.
+Compose defaults to `tiny.en` with beam size `1` for lower CPU latency. Set
+`HUSH_WHISPER_MODEL=base.en` and `HUSH_WHISPER_BEAM_SIZE=5` when accuracy is
+more important than response time.
 
 ---
 
@@ -216,7 +219,7 @@ dashboard_port = 57327
 
 ### Cloud speech model
 
-Live WebSocket sessions use `faster-whisper` `base.en` on the VM. The desktop
+Live WebSocket sessions use the configured `faster-whisper` model on the VM. The desktop
 does not load Parakeet or Whisper and has no local transcription fallback.
 
 ### Available hotkeys

@@ -60,6 +60,21 @@ from ..config.snippets import (
 from ..config.paths import CONFIG_PATH
 from ..platform.factory import get_platform_services
 
+
+def _configured_whisper_model() -> str:
+    """Return the cloud Whisper model selected at container startup."""
+    return os.getenv("HUSH_WHISPER_MODEL", "base.en").strip() or "base.en"
+
+
+def _configured_whisper_beam_size() -> int:
+    """Return a bounded beam size; one favors latency on CPU-only VMs."""
+    try:
+        beam_size = int(os.getenv("HUSH_WHISPER_BEAM_SIZE", "5"))
+    except ValueError:
+        return 5
+    return min(max(beam_size, 1), 10)
+
+
 # ── Shared state (updated by main.py) ─────────────────────────────── #
 _state: dict[str, Any] = {
     "status":        "idle",       # idle | recording | processing
@@ -67,7 +82,7 @@ _state: dict[str, Any] = {
     "hotkey":        "ctrl_l",
     "asr_engine":    "whisper",
     "ollama_model":  "llama3.2:3b",
-    "web_model":     "base.en",
+    "web_model":     _configured_whisper_model(),
 }
 
 def update_state(**kwargs):
@@ -149,7 +164,7 @@ async def _read_web_audio(request: Any) -> bytes:
 
 
 def _get_web_transcriber():
-    """Load the small English Whisper model once, on the first web request."""
+    """Load the configured English Whisper model once, on the first request."""
     global _web_transcriber
     if _web_transcriber is None:
         with _web_transcriber_init_lock:
@@ -158,9 +173,10 @@ def _get_web_transcriber():
 
                 _web_transcriber = create_transcriber(
                     engine="whisper",
-                    model="base.en",
+                    model=_configured_whisper_model(),
                     language="en",
                     compute_type_cpu="int8",
+                    beam_size=_configured_whisper_beam_size(),
                 )
     return _web_transcriber
 

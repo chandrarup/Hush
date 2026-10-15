@@ -533,7 +533,7 @@ html[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #555; }
           </div>
           <div class="settings-control">
             <select id="sel-engine" disabled>
-              <option value="whisper">Whisper base.en</option>
+              <option value="whisper">Whisper</option>
             </select>
           </div>
         </div>
@@ -843,6 +843,8 @@ async function loadHome() {
     // Sync level card
     setActiveLevel(status.cleanup_level || 'light');
     document.getElementById('sel-engine').value = status.asr_engine || 'auto';
+    const engineOption = document.querySelector('#sel-engine option[value="whisper"]');
+    if (engineOption) engineOption.textContent = `Whisper ${status.web_model || 'base.en'}`;
     document.getElementById('sel-model').value = status.ollama_model || 'llama3.2:3b';
     if (status.live_sessions?.length) updateLiveSession(status.live_sessions[0]);
   } catch(e) {
