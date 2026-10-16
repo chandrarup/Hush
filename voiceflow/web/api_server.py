@@ -58,6 +58,13 @@ from ..config.snippets import (
     update_snippet,
 )
 from ..config.paths import CONFIG_PATH
+from ..config.defaults import DEFAULT_CONFIG
+from ..cloud.managed_state import (
+    ManagedStateError,
+    get_managed_state,
+    initialize_managed_state,
+    managed_state_enabled,
+)
 from ..platform.factory import get_platform_services
 
 
@@ -109,6 +116,7 @@ _web_transcribe_lock = threading.Lock()
 _web_status_lock = threading.Lock()
 _web_active_transcriptions = 0
 _history_enabled = True
+_managed_startup_error: str | None = None
 _active_cloud_sessions: dict[str, dict[str, Any]] = {}
 _cloud_sessions_lock = threading.Lock()
 _CLOUD_PARTIAL_INTERVAL_SECONDS = 1.5
@@ -201,7 +209,12 @@ def _allowed_web_hosts() -> set[str]:
 
 
 def _team_token() -> str:
-    """Return the VM's shared team token without supplying an unsafe default."""
+    """Return the shared token from Secret Manager in the managed VM runtime."""
+    if managed_state_enabled():
+        try:
+            return get_managed_state().team_token
+        except ManagedStateError:
+            return ""
     return os.getenv("HUSH_TEAM_TOKEN", "").strip()
 
 
@@ -235,7 +248,7 @@ def _request_token_is_valid(request: Any) -> bool:
 
 def _is_public_http_path(path: str) -> bool:
     """Keep only the dashboard shell, static assets, and health probe public."""
-    return path in {"/", "/health"} or path.startswith("/ui/")
+    return path in {"/", "/health", "/ready"} or path.startswith("/ui/")
 
 
 def _request_origin_is_trusted(request: Any) -> bool:
@@ -289,7 +302,16 @@ def _clean_cloud_transcript(raw_text: str, cleanup_level: str, app_name: str | N
     if is_exact_shortcut(raw_text, snippets):
         return expand_snippets(raw_text, snippets)
 
-    config = load_config()
+    if managed_state_enabled():
+        config = {
+            "llm": {
+                **DEFAULT_CONFIG.get("llm", {}),
+                "cleanup_level": _state.get("cleanup_level", "light"),
+                "ollama_model": _state.get("ollama_model", "llama3.2:3b"),
+            }
+        }
+    else:
+        config = load_config()
     llm_cfg = config.get("llm", {})
     level = cleanup_level if cleanup_level in _VALID_CLEANUP_LEVELS else llm_cfg.get(
         "cleanup_level", "light"
@@ -378,7 +400,20 @@ if _FASTAPI_OK:
 
     @app.on_event("startup")
     async def _startup():
-        global _event_loop
+        global _event_loop, _managed_startup_error
+        _managed_startup_error = None
+        if managed_state_enabled():
+            try:
+                managed = await asyncio.to_thread(initialize_managed_state)
+                saved_settings = await asyncio.to_thread(managed.get_settings)
+                for key in ("cleanup_level", "hotkey", "asr_engine", "ollama_model"):
+                    if key in saved_settings:
+                        _state[key] = saved_settings[key]
+            except Exception as exc:
+                _managed_startup_error = str(exc)
+                raise RuntimeError(
+                    "Hush could not initialize its managed state dependencies."
+                ) from exc
         _validate_cloud_configuration()
         _event_loop = asyncio.get_running_loop()
         if _history_enabled:
@@ -411,6 +446,23 @@ if _FASTAPI_OK:
     @app.get("/health")
     async def get_health():
         return {"status": "ok"}
+
+    @app.get("/ready")
+    async def get_readiness():
+        """Report whether every required managed dependency is usable."""
+        if _managed_startup_error:
+            return JSONResponse(
+                {"status": "not-ready", "error": "managed state initialization failed"},
+                status_code=503,
+            )
+        if not managed_state_enabled():
+            return {"status": "ready", "mode": "local"}
+        checks = await asyncio.to_thread(get_managed_state().check_ready)
+        if not all(checks.values()):
+            return JSONResponse(
+                {"status": "not-ready", "checks": checks}, status_code=503
+            )
+        return {"status": "ready", "mode": "managed", "checks": checks}
 
     @app.get("/history")
     async def get_history(limit: int = 200, offset: int = 0):
@@ -453,6 +505,20 @@ if _FASTAPI_OK:
             status_code = 413 if "10 MB limit" in str(exc) else 400
             return JSONResponse({"error": str(exc)}, status_code=status_code)
 
+        upload: dict[str, Any] | None = None
+        if managed_state_enabled():
+            try:
+                upload = await asyncio.to_thread(
+                    get_managed_state().store_upload,
+                    payload,
+                    request.headers.get("x-hush-filename"),
+                )
+            except ManagedStateError as exc:
+                print(f"[api] Cloud Storage upload failed: {exc}")
+                return JSONResponse(
+                    {"error": "The recording could not be stored."}, status_code=503
+                )
+
         _change_web_transcription_count(1)
         try:
             text = await asyncio.to_thread(_transcribe_web_audio, audio)
@@ -469,15 +535,40 @@ if _FASTAPI_OK:
                 entry = _history.get_entry(history_id)
                 if entry:
                     push_event({"type": "new_entry", "entry": entry})
-            return {"text": text, "history_id": history_id}
+            if upload is not None:
+                await asyncio.to_thread(
+                    get_managed_state().complete_upload,
+                    upload["id"],
+                    history_id,
+                )
+                upload["status"] = "completed"
+            response: dict[str, Any] = {"text": text, "history_id": history_id}
+            if upload is not None:
+                response["upload"] = upload
+            return response
         except RuntimeError as exc:
             print(f"[api] Web transcriber unavailable: {exc}")
+            if upload is not None:
+                await asyncio.to_thread(
+                    get_managed_state().fail_upload,
+                    upload["id"],
+                    "transcription model unavailable",
+                )
             return JSONResponse(
                 {"error": "The transcription model could not be loaded."},
                 status_code=503,
             )
         except Exception as exc:
             print(f"[api] Browser transcription failed: {exc}")
+            if upload is not None:
+                try:
+                    await asyncio.to_thread(
+                        get_managed_state().fail_upload,
+                        upload["id"],
+                        "transcription failed",
+                    )
+                except Exception:
+                    pass
             return JSONResponse({"error": "Transcription failed."}, status_code=500)
         finally:
             _change_web_transcription_count(-1)
@@ -528,7 +619,7 @@ if _FASTAPI_OK:
             return {"path": "cloud", "snippets": [], "version": ""}
         snippets, version = get_snippets_snapshot()
         return {
-            "path": str(SNIPPETS_PATH),
+            "path": "cloud-sql" if managed_state_enabled() else str(SNIPPETS_PATH),
             "snippets": [
                 {**snippet, "index": index, "version": version}
                 for index, snippet in enumerate(snippets)
@@ -897,6 +988,14 @@ def _persist_runtime_settings(settings: dict[str, Any]) -> None:
 
 def _persist_config_updates(settings: dict[str, Any]) -> None:
     """Update config.toml atomically without discarding unrelated settings."""
+    if managed_state_enabled():
+        try:
+            managed = get_managed_state()
+            for key, value in settings.items():
+                managed.set_setting(key, value)
+        except Exception as exc:
+            print(f"[api] Could not persist managed settings: {exc}")
+        return
     temporary_path: str | None = None
     try:
         import toml
@@ -928,6 +1027,12 @@ def _persist_config_updates(settings: dict[str, Any]) -> None:
 
 def _persist_hotkey(key: str):
     """Write the selected hotkey back to the project-local config.toml."""
+    if managed_state_enabled():
+        try:
+            get_managed_state().set_setting("hotkey", key)
+        except Exception as exc:
+            print(f"[api] Could not persist managed hotkey: {exc}")
+        return
     try:
         import toml
         cfg = toml.load(str(CONFIG_PATH)) if CONFIG_PATH.exists() else {}

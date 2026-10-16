@@ -25,11 +25,18 @@ def make_wav(
     return buffer.getvalue()
 
 
-def post_audio(payload: bytes, *, include_origin: bool = True):
+def post_audio(
+    payload: bytes,
+    *,
+    include_origin: bool = True,
+    filename: str | None = None,
+):
     async def exercise():
         headers = {"Content-Type": "audio/wav"}
         if include_origin:
             headers["Origin"] = "http://127.0.0.1:57327"
+        if filename:
+            headers["X-Hush-Filename"] = filename
         transport = httpx.ASGITransport(app=api_server.app)
         async with httpx.AsyncClient(
             transport=transport,
@@ -183,6 +190,45 @@ def test_transcribe_reports_model_load_failure(monkeypatch):
     assert api_server._state["status"] == "idle"
 
 
+def test_managed_transcribe_stores_upload_and_links_history(monkeypatch):
+    completed = []
+
+    class FakeManagedState:
+        team_token = ""
+
+        def store_upload(self, payload, filename):
+            assert payload.startswith(b"RIFF")
+            assert filename == "team sample.wav"
+            return {
+                "id": "d4c24734-9834-4a71-8f89-b0a2a7e12ab9",
+                "bucket": "hush-uploads",
+                "object_name": "uploads/2026/10/15/d4c24734.wav",
+                "original_filename": filename,
+                "size_bytes": len(payload),
+                "status": "stored",
+            }
+
+        def complete_upload(self, upload_id, history_id):
+            completed.append((upload_id, history_id))
+
+    managed = FakeManagedState()
+    monkeypatch.setattr(api_server, "managed_state_enabled", lambda: True)
+    monkeypatch.setattr(api_server, "get_managed_state", lambda: managed)
+    monkeypatch.setattr(api_server, "_transcribe_web_audio", lambda _audio: "Stored safely.")
+    monkeypatch.setattr(api_server._history, "save_entry", lambda **_entry: 31)
+    monkeypatch.setattr(api_server._history, "get_entry", lambda _entry_id: None)
+
+    response = post_audio(
+        make_wav(np.zeros(1_600, dtype="<i2")),
+        filename="team sample.wav",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["history_id"] == 31
+    assert response.json()["upload"]["status"] == "completed"
+    assert completed == [("d4c24734-9834-4a71-8f89-b0a2a7e12ab9", 31)]
+
+
 def test_transcribe_rejects_malformed_audio_and_cross_origin_request():
     malformed = post_audio(b"not a wav")
     missing_origin = post_audio(make_wav(np.zeros(16, dtype="<i2")), include_origin=False)
@@ -236,6 +282,7 @@ def test_browser_pages_use_same_origin_api():
     assert "const API = window.location.origin;" in onboarding_html
     assert "id=\"audio-file\"" in index_html
     assert "API + '/transcribe'" in index_html
+    assert "'X-Hush-Filename': file.name" in index_html
     assert 'onclick="copyText' not in index_html
     assert 'class="btn primary copy-clean"' in index_html
     assert "new EventSource" not in index_html

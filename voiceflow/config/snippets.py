@@ -19,6 +19,13 @@ from .paths import CONFIG_DIR, SNIPPETS_PATH
 _STORE_LOCK = threading.RLock()
 
 
+def _managed_store():
+    """Return the Cloud SQL store on the VM; desktop snippets remain local."""
+    from ..cloud.managed_state import get_managed_state, managed_state_enabled
+
+    return get_managed_state() if managed_state_enabled() else None
+
+
 class SnippetStoreError(ValueError):
     """Raised when the persisted snippet store cannot be read safely."""
 
@@ -64,6 +71,9 @@ def _normalise(data: dict[str, Any] | None, *, strict: bool = False) -> list[dic
 
 def load_snippets() -> list[dict[str, str]]:
     """Load saved snippets, propagating malformed or unreadable files."""
+    managed = _managed_store()
+    if managed is not None:
+        return managed.list_snippets()
     if not SNIPPETS_PATH.exists():
         return []
     with _STORE_LOCK:
@@ -118,6 +128,11 @@ def add_snippet(name: str, shortcut: str, text: str) -> list[dict[str, str]]:
     """Create or update a snippet using its spoken shortcut as the key."""
     name, shortcut, text = _validated_fields(name, shortcut, text)
 
+    managed = _managed_store()
+    if managed is not None:
+        managed.upsert_snippet(name, shortcut, _normalise_text(shortcut), text)
+        return managed.list_snippets()
+
     with _STORE_LOCK:
         snippets = load_snippets()
         normalized_shortcut = _normalise_text(shortcut)
@@ -133,6 +148,15 @@ def add_snippet(name: str, shortcut: str, text: str) -> list[dict[str, str]]:
 def update_snippet(index: int, name: str, shortcut: str, text: str) -> list[dict[str, str]]:
     """Update one snippet while preventing duplicate spoken shortcuts."""
     name, shortcut, text = _validated_fields(name, shortcut, text)
+    managed = _managed_store()
+    if managed is not None:
+        try:
+            managed.update_snippet(index, name, shortcut, _normalise_text(shortcut), text)
+        except Exception as exc:
+            if exc.__class__.__name__ == "IntegrityError":
+                raise ValueError("A snippet with this spoken shortcut already exists.") from exc
+            raise
+        return managed.list_snippets()
     with _STORE_LOCK:
         snippets = load_snippets()
         if index < 0 or index >= len(snippets):
@@ -167,6 +191,10 @@ def remove_snippet(index: int, expected_version: str) -> list[dict[str, str]]:
             raise SnippetConflictError("The snippet list changed. Reload and try again.")
         if index < 0 or index >= len(snippets):
             raise IndexError("Snippet does not exist.")
+        managed = _managed_store()
+        if managed is not None:
+            managed.delete_snippet(index)
+            return managed.list_snippets()
         snippets.pop(index)
         return _save(snippets)
 

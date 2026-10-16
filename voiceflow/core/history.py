@@ -1,9 +1,4 @@
-"""
-history.py — SQLite transcription history store.
-
-Saves every transcription entry with timestamp, raw ASR output,
-LLM-cleaned output, cleanup level, and active app name.
-"""
+"""Transcription history backed by SQLite locally and Cloud SQL on the VM."""
 
 import sqlite3
 from datetime import datetime
@@ -12,6 +7,13 @@ from ..config.paths import HISTORY_DB_PATH
 
 
 DB_PATH = HISTORY_DB_PATH
+
+
+def _managed_store():
+    """Return the initialized Cloud SQL store only for the managed VM runtime."""
+    from ..cloud.managed_state import get_managed_state, managed_state_enabled
+
+    return get_managed_state() if managed_state_enabled() else None
 
 
 def _conn() -> sqlite3.Connection:
@@ -24,6 +26,11 @@ def _conn() -> sqlite3.Connection:
 
 
 def init_db():
+    managed = _managed_store()
+    if managed is not None:
+        managed.apply_migrations()
+        print("[history] Cloud SQL schema ready")
+        return
     with _conn() as c:
         c.execute("""
             CREATE TABLE IF NOT EXISTS entries (
@@ -58,6 +65,16 @@ def save_entry(
     status: str = "final",
 ) -> int:
     """Save a transcription entry. Returns the new row id."""
+    managed = _managed_store()
+    if managed is not None:
+        return managed.save_entry(
+            raw=raw,
+            clean=clean,
+            level=level,
+            app=app,
+            client_id=client_id,
+            status=status,
+        )
     words = len(clean.split())
     ts    = datetime.now().isoformat(timespec="seconds")
     with _conn() as c:
@@ -73,6 +90,9 @@ def save_entry(
 
 def get_entries(limit: int = 200, offset: int = 0) -> list[dict]:
     """Return entries newest-first."""
+    managed = _managed_store()
+    if managed is not None:
+        return managed.get_entries(limit=limit, offset=offset)
     with _conn() as c:
         rows = c.execute(
             "SELECT * FROM entries ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -82,18 +102,29 @@ def get_entries(limit: int = 200, offset: int = 0) -> list[dict]:
 
 
 def get_entry(entry_id: int) -> dict | None:
+    managed = _managed_store()
+    if managed is not None:
+        return managed.get_entry(entry_id)
     with _conn() as c:
         row = c.execute("SELECT * FROM entries WHERE id=?", (entry_id,)).fetchone()
     return dict(row) if row else None
 
 
 def delete_entry(entry_id: int):
+    managed = _managed_store()
+    if managed is not None:
+        managed.delete_entry(entry_id)
+        return
     with _conn() as c:
         c.execute("DELETE FROM entries WHERE id=?", (entry_id,))
         c.commit()
 
 
 def clear_all():
+    managed = _managed_store()
+    if managed is not None:
+        managed.clear_entries()
+        return
     with _conn() as c:
         c.execute("DELETE FROM entries")
         c.commit()
@@ -101,6 +132,9 @@ def clear_all():
 
 def get_stats() -> dict:
     """Total words, average WPM (rough), and number of active days."""
+    managed = _managed_store()
+    if managed is not None:
+        return managed.get_stats()
     with _conn() as c:
         row = c.execute("""
             SELECT

@@ -1,0 +1,16 @@
+{
+  "backup": "gs://hush-milestone-2-20260922-uploads/migration-backups/history-20261015T211108Z.db",
+  "counts_match": true,
+  "destination": {
+    "database": "hush",
+    "entries": 18,
+    "instance": "hush-milestone-2-20260922:us-central1:hush-postgres-m4"
+  },
+  "migrated_settings": 4,
+  "migrated_snippets": 0,
+  "source": {
+    "database": "/source/history.db",
+    "entries": 18
+  },
+  "verified_at": "2026-10-15T21:11:08.416025+00:00"
+}

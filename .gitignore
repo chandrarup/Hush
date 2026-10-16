@@ -59,4 +59,6 @@ scratch/
 .codex-finalizer*/
 .codex-m2-build/
 .codex-pptx-build/
+.codex-artifacts/
+deliverables/Milestone4/.build/
 .playwright-mcp/
