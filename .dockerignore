@@ -58,3 +58,6 @@ lets-hush
 main.py
 setup_check.py
 scripts
+!scripts/
+scripts/*
+!scripts/migrate_sqlite_to_cloud_sql.py

@@ -39,7 +39,7 @@ services:
       - hush-private
 
   hush:
-    image: ${HUSH_IMAGE:-us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush:v1}
+    image: ${HUSH_IMAGE:-us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush:v2.0.2}
     platform: linux/amd64
     build:
       context: .
@@ -47,34 +47,50 @@ services:
       platforms:
         - linux/amd64
     restart: unless-stopped
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
     environment:
       HUSH_ALLOWED_HOSTS: ${HUSH_ALLOWED_HOSTS:-localhost,127.0.0.1,::1}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-hush-milestone-2-20260922}
+      HUSH_CLOUD_SQL_INSTANCE: ${HUSH_CLOUD_SQL_INSTANCE:-hush-milestone-2-20260922:us-central1:hush-postgres-m4}
+      HUSH_DB_NAME: ${HUSH_DB_NAME:-hush}
+      HUSH_DB_USER: ${HUSH_DB_USER:-hush_app}
+      HUSH_DB_PASSWORD_SECRET: ${HUSH_DB_PASSWORD_SECRET:-hush-db-password}
+      HUSH_TEAM_TOKEN_SECRET: ${HUSH_TEAM_TOKEN_SECRET:-hush-team-token}
+      HUSH_UPLOAD_BUCKET: ${HUSH_UPLOAD_BUCKET:-hush-milestone-2-20260922-uploads}
       HUSH_OLLAMA_BASE_URL: http://ollama:11434
       HUSH_SERVER_MODE: cloud
-      HUSH_TEAM_TOKEN: ${HUSH_TEAM_TOKEN:?Set HUSH_TEAM_TOKEN in .env or the shell}
       HUSH_WHISPER_BEAM_SIZE: ${HUSH_WHISPER_BEAM_SIZE:-1}
       HUSH_WHISPER_MODEL: ${HUSH_WHISPER_MODEL:-tiny.en}
       HF_HOME: /var/cache/hush/huggingface
       XDG_CACHE_HOME: /var/cache/hush
     ports:
-      - "57327:57327"
+      # Keep bearer-token traffic off the public network. Operators reach this
+      # loopback listener through an encrypted SSH or IAP tunnel.
+      - "127.0.0.1:57327:57327"
     volumes:
-      - hush-data:/app/data
       - whisper-cache:/var/cache/hush
+    tmpfs:
+      - /app/data:size=16m,uid=10001,gid=10001,mode=0700
+      - /tmp:size=64m,uid=10001,gid=10001,mode=1777
     networks:
       - hush-private
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:57327/health"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:57327/ready"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 30s
 
 volumes:
-  hush-data:
   ollama-models:
   whisper-cache:
 
 networks:
   hush-private:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.240.0/24

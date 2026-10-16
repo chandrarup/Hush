@@ -809,7 +809,10 @@ transcribeButton.addEventListener('click', async () => {
     transcribeResult.textContent = 'Transcribing with Whisper base.en...';
     const response = await apiFetch(API + '/transcribe', {
       method: 'POST',
-      headers: {'Content-Type': 'audio/wav'},
+      headers: {
+        'Content-Type': 'audio/wav',
+        'X-Hush-Filename': file.name || 'recording.wav',
+      },
       body: wav,
     });
     const payload = await response.json();
