@@ -20,6 +20,9 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+ARG HUSH_MODEL_REVISION=0d3d19a32d3338f10357c0889762bd8d64bbdeba
+RUN /app/.venv/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('Systran/faster-whisper-tiny.en', revision='${HUSH_MODEL_REVISION}', local_dir='/opt/hush-models/tiny.en', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.txt'])"
+
 
 FROM python:3.12.12-slim-bookworm AS runtime
 
@@ -39,6 +42,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /opt/hush-models /opt/hush-models
 COPY --chown=hush:hush voiceflow ./voiceflow
 COPY --chown=hush:hush migrations ./migrations
 COPY --chown=hush:hush scripts ./scripts

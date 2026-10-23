@@ -1,0 +1,64 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/ashrithvadde/Documents/EDSAI/Sem 3/Cloud Computing/Project/Hush
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collected 101 items
+
+tests/test_cleaner.py .                                                  [  0%]
+tests/test_cloud_transcription.py ...........                            [ 11%]
+tests/test_container_artifacts.py ......                                 [ 17%]
+tests/test_gemini_transcribe_button.py ...                               [ 20%]
+tests/test_hotkey_api.py ....                                            [ 24%]
+tests/test_hotkey_lifecycle.py ...                                       [ 27%]
+tests/test_macos_app_packaging.py ..........................             [ 53%]
+tests/test_managed_state.py .....                                        [ 58%]
+tests/test_orchestration_probes.py ......                                [ 64%]
+tests/test_runtime_config.py .                                           [ 65%]
+tests/test_setup.py .......                                              [ 72%]
+tests/test_smoke.py ...                                                  [ 75%]
+tests/test_snippet_api.py .                                              [ 76%]
+tests/test_snippets.py ....                                              [ 80%]
+tests/test_storage_paths.py ....                                         [ 84%]
+tests/test_web_transcription_api.py ................                     [100%]
+
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /Users/ashrithvadde/Documents/EDSAI/Sem 3/Cloud Computing/Project/Hush/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+.venv/lib/python3.12/site-packages/starlette/testclient.py:53
+  /Users/ashrithvadde/Documents/EDSAI/Sem 3/Cloud Computing/Project/Hush/.venv/lib/python3.12/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+voiceflow/web/api_server.py:407
+  /Users/ashrithvadde/Documents/EDSAI/Sem 3/Cloud Computing/Project/Hush/voiceflow/web/api_server.py:407: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    @app.on_event("startup")
+
+.venv/lib/python3.12/site-packages/fastapi/applications.py:4681
+.venv/lib/python3.12/site-packages/fastapi/applications.py:4681
+  /Users/ashrithvadde/Documents/EDSAI/Sem 3/Cloud Computing/Project/Hush/.venv/lib/python3.12/site-packages/fastapi/applications.py:4681: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+voiceflow/web/api_server.py:431
+  /Users/ashrithvadde/Documents/EDSAI/Sem 3/Cloud Computing/Project/Hush/voiceflow/web/api_server.py:431: DeprecationWarning:
+          on_event is deprecated, use lifespan event handlers instead.
+
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 101 passed, 6 warnings in 0.80s ========================

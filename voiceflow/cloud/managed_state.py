@@ -113,7 +113,7 @@ class ManagedState:
 
         database_password = self._access_secret(self.database_password_secret)
         self._team_token = self._access_secret(self.team_token_secret)
-        self._connector = Connector(refresh_strategy="LAZY")
+        self._connector = Connector(refresh_strategy="LAZY", timeout=5)
 
         def connect() -> Any:
             return self._connector.connect(
@@ -123,13 +123,15 @@ class ManagedState:
                 password=database_password,
                 db=self.database,
                 ip_type=IPTypes.PRIVATE,
+                timeout=2,
             )
 
         self._engine = create_engine(
             "postgresql+pg8000://",
             creator=connect,
-            pool_size=5,
-            max_overflow=2,
+            pool_size=int(os.getenv("HUSH_DB_POOL_SIZE", "2")),
+            max_overflow=int(os.getenv("HUSH_DB_MAX_OVERFLOW", "0")),
+            pool_timeout=1,
             pool_pre_ping=True,
             pool_recycle=1800,
         )
@@ -177,6 +179,8 @@ class ManagedState:
             raise ManagedStateError("No database migration files were found.")
 
         with engine.begin() as connection:
+            # Lock before inspecting the ledger: two replicas can start together.
+            connection.execute(text("SELECT pg_advisory_xact_lock(57327001)"))
             connection.execute(text(
                 "CREATE TABLE IF NOT EXISTS schema_migrations ("
                 "version TEXT PRIMARY KEY, "
@@ -213,7 +217,9 @@ class ManagedState:
             pass
         try:
             next(
-                iter(self._storage_client.list_blobs(self.bucket_name, max_results=1)),
+                iter(self._storage_client.list_blobs(
+                    self.bucket_name, max_results=1, timeout=2, retry=None
+                )),
                 None,
             )
             checks["storage"] = True

@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hush
+  namespace: hush
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: hush
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: hush
+    spec:
+      serviceAccountName: hush-runtime
+      terminationGracePeriodSeconds: 210
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: hush
+      containers:
+        - name: hush
+          image: us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+          args: ['uvicorn', 'voiceflow.web.api_server:app', '--host', '0.0.0.0', '--port', '57327', '--no-access-log', '--timeout-graceful-shutdown', '75']
+          command: ['/app/.venv/bin/python', '-m']
+          ports:
+            - name: http
+              containerPort: 57327
+          envFrom:
+            - configMapRef:
+                name: hush-config
+          resources:
+            requests:
+              cpu: '1'
+              memory: 2Gi
+              ephemeral-storage: 1Gi
+            limits:
+              cpu: '1'
+              memory: 2Gi
+              ephemeral-storage: 1Gi
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ['ALL']
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              exec:
+                command: ['/bin/sh', '-c', 'touch /tmp/hush-draining; sleep 120']
+          volumeMounts:
+            - name: temp
+              mountPath: /tmp
+            - name: data
+              mountPath: /app/data
+            - name: cache
+              mountPath: /var/cache/hush
+      volumes:
+        - name: temp
+          emptyDir:
+            sizeLimit: 128Mi
+        - name: data
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: cache
+          emptyDir:
+            sizeLimit: 128Mi

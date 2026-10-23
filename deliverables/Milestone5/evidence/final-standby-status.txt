@@ -1,0 +1,7 @@
+NAME                   READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/hush   0/0     0            0           137m
+
+NAME                                       REFERENCE         TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/hush   Deployment/hush   cpu: <unknown>/60%   2         4         0          137m
+TERMINATED
+Fri Oct 23 04:40:14 UTC 2026

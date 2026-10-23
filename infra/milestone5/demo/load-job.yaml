@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hush-load
+  namespace: hush
+  labels:
+    app: hush-load
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 240
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: hush-load
+    spec:
+      restartPolicy: Never
+      serviceAccountName: hush-runtime
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: load
+          image: us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+          command: ['python', 'scripts/milestone5_load.py']
+          envFrom:
+            - configMapRef:
+                name: hush-config
+          env:
+            - name: HUSH_LOAD_TARGET
+              value: http://hush.hush.svc.cluster.local
+            - name: HUSH_PUBLIC_HOST
+              value: hush.34.36.104.111.nip.io
+            - name: HUSH_LOAD_SECONDS
+              value: '180'
+            - name: HUSH_LOAD_CONCURRENCY
+              value: '4'
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi

@@ -89,7 +89,7 @@ _state: dict[str, Any] = {
     "hotkey":        "ctrl_l",
     "asr_engine":    "whisper",
     "ollama_model":  "llama3.2:3b",
-    "web_model":     _configured_whisper_model(),
+    "web_model":     pathlib.Path(_configured_whisper_model()).name,
 }
 
 def update_state(**kwargs):
@@ -113,6 +113,7 @@ _WEB_AUDIO_MAX_SECONDS = 60
 _web_transcriber: Any | None = None
 _web_transcriber_init_lock = threading.Lock()
 _web_transcribe_lock = threading.Lock()
+_cloud_work_slots = threading.BoundedSemaphore(2)
 _web_status_lock = threading.Lock()
 _web_active_transcriptions = 0
 _history_enabled = True
@@ -303,11 +304,12 @@ def _clean_cloud_transcript(raw_text: str, cleanup_level: str, app_name: str | N
         return expand_snippets(raw_text, snippets)
 
     if managed_state_enabled():
+        saved_settings = get_managed_state().get_settings()
         config = {
             "llm": {
                 **DEFAULT_CONFIG.get("llm", {}),
-                "cleanup_level": _state.get("cleanup_level", "light"),
-                "ollama_model": _state.get("ollama_model", "llama3.2:3b"),
+                "cleanup_level": saved_settings.get("cleanup_level", "light"),
+                "ollama_model": saved_settings.get("ollama_model", "llama3.2:3b"),
             }
         }
     else:
@@ -388,6 +390,10 @@ if _FASTAPI_OK:
     @app.middleware("http")
     async def _require_authenticated_api(request: Request, call_next):
         """Reject untrusted hosts, unauthenticated APIs, and cross-origin writes."""
+        # Infrastructure probes use Pod IP Host headers. Only these read-only
+        # probe handlers bypass the application's canonical-host boundary.
+        if request.method == "GET" and request.url.path in {"/health", "/ready"}:
+            return await call_next(request)
         request_host = urlsplit(f"//{request.headers.get('host', '')}").hostname
         if not request_host or request_host.lower() not in _allowed_web_hosts():
             return JSONResponse({"error": "Untrusted host."}, status_code=403)
@@ -415,10 +421,17 @@ if _FASTAPI_OK:
                     "Hush could not initialize its managed state dependencies."
                 ) from exc
         _validate_cloud_configuration()
+        if os.getenv("HUSH_WARM_MODEL") == "1":
+            await asyncio.to_thread(_get_web_transcriber)
         _event_loop = asyncio.get_running_loop()
         if _history_enabled:
             _history.init_db()
         print("[api] Server ready at http://localhost:57327")
+
+    @app.on_event("shutdown")
+    async def _shutdown():
+        if managed_state_enabled():
+            await asyncio.to_thread(get_managed_state().close)
 
     # ── Dashboard HTML ──────────────────────────────────────────── #
 
@@ -450,6 +463,8 @@ if _FASTAPI_OK:
     @app.get("/ready")
     async def get_readiness():
         """Report whether every required managed dependency is usable."""
+        if pathlib.Path("/tmp/hush-draining").exists():
+            return JSONResponse({"status": "not-ready", "reason": "draining"}, status_code=503)
         if _managed_startup_error:
             return JSONResponse(
                 {"status": "not-ready", "error": "managed state initialization failed"},
@@ -458,6 +473,7 @@ if _FASTAPI_OK:
         if not managed_state_enabled():
             return {"status": "ready", "mode": "local"}
         checks = await asyncio.to_thread(get_managed_state().check_ready)
+        checks["model"] = os.getenv("HUSH_WARM_MODEL") != "1" or _web_transcriber is not None
         if not all(checks.values()):
             return JSONResponse(
                 {"status": "not-ready", "checks": checks}, status_code=503
@@ -478,10 +494,22 @@ if _FASTAPI_OK:
 
     @app.get("/status")
     async def get_status():
-        return {**_state, "live_sessions": _cloud_sessions_snapshot()}
+        saved = await asyncio.to_thread(get_managed_state().get_settings) if managed_state_enabled() else {}
+        return {**_state, **saved, "live_sessions": _cloud_sessions_snapshot()}
 
     @app.post("/transcribe")
     async def post_transcribe(request: Request):
+        if not _cloud_work_slots.acquire(blocking=False):
+            return JSONResponse(
+                {"error": "This replica is busy. Please retry shortly."},
+                status_code=429, headers={"Retry-After": "2"},
+            )
+        try:
+            return await _post_transcribe(request)
+        finally:
+            _cloud_work_slots.release()
+
+    async def _post_transcribe(request: Request):
         if not _history_enabled:
             return JSONResponse(
                 {"error": "Diagnostic upload is available on the cloud dashboard only."},
@@ -723,6 +751,10 @@ if _FASTAPI_OK:
             return
 
         await websocket.accept()
+        if not _cloud_work_slots.acquire(blocking=False):
+            await websocket.send_json({"type": "error", "message": "This replica is busy. Please retry shortly."})
+            await websocket.close(code=1013)
+            return
         session_id = uuid.uuid4().hex[:16]
         client_id = "unknown"
         app_name: str | None = None
@@ -894,6 +926,7 @@ if _FASTAPI_OK:
                 "message": "Cloud transcription failed.",
             })
         finally:
+            _cloud_work_slots.release()
             if session_registered:
                 _remove_cloud_session(session_id)
                 remaining = _cloud_sessions_snapshot()
