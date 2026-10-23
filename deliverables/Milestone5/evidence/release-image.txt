@@ -1,0 +1,6 @@
+us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+hush-79c8b8dd7f-b6qmb us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+hush-79c8b8dd7f-dw4p5 us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+hush-79c8b8dd7f-mksmc us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+hush-79c8b8dd7f-w2xlc us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+hush-79c8b8dd7f-zrq7h us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d

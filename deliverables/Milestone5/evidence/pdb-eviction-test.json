@@ -1,0 +1,14 @@
+[
+  {
+    "pod": "hush-79c8b8dd7f-dw4p5",
+    "returncode": 0,
+    "stdout": "{\"kind\":\"Status\",\"apiVersion\":\"v1\",\"metadata\":{},\"status\":\"Success\",\"code\":201}\n",
+    "stderr": ""
+  },
+  {
+    "pod": "hush-79c8b8dd7f-zrq7h",
+    "returncode": 1,
+    "stdout": "",
+    "stderr": "Error from server (TooManyRequests): Cannot evict pod as it would violate the pod's disruption budget.\n"
+  }
+]

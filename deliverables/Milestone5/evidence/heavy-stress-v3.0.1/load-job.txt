@@ -1,0 +1,2 @@
+{"event": "load_started", "seconds": 180, "concurrency": 4}
+{"event": "load_finished", "responses": {"200": 5, "429": 109, "transport_error": 11}}

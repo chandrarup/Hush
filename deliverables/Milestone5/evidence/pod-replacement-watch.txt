@@ -1,0 +1,16 @@
+NAME                    READY   STATUS        RESTARTS   AGE     IP          NODE                                     NOMINATED NODE   READINESS GATES
+hush-79c8b8dd7f-6q5wg   1/1     Terminating   0          6m29s   10.30.1.8   gk3-hush-m5-nap-3dra60n3-b89987b3-vp5z   <none>           1/1
+hush-79c8b8dd7f-zb7v7   1/1     Running       0          5m55s   10.30.1.9   gk3-hush-m5-nap-3dra60n3-b89987b3-vp5z   <none>           1/1
+hush-79c8b8dd7f-zrq7h   0/1     Pending       0          0s      <none>      <none>                                   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     Pending       0          1s      <none>      gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     Pending       0          1s      <none>      gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     ContainerCreating   0          1s      <none>      gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     ContainerCreating   0          2s      <none>      gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     ContainerCreating   0          4s      <none>      gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     Running             0          4s      10.30.0.137   gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     Running             0          6s      10.30.0.137   gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           0/1
+hush-79c8b8dd7f-zrq7h   0/1     Running             0          7s      10.30.0.137   gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           1/1
+hush-79c8b8dd7f-6q5wg   0/1     Terminating         0          6m47s   10.30.1.8     gk3-hush-m5-nap-3dra60n3-b89987b3-vp5z   <none>           1/1
+hush-79c8b8dd7f-zrq7h   0/1     Running             0          41s     10.30.0.137   gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           1/1
+hush-79c8b8dd7f-zrq7h   1/1     Running             0          41s     10.30.0.137   gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           1/1
+hush-79c8b8dd7f-zrq7h   1/1     Running             0          42s     10.30.0.137   gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           1/1

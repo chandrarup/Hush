@@ -1219,6 +1219,12 @@ setInterval(async () => {
     updateStatusDot(s.status);
   } catch(e) {}
 }, 2000);
+// Events are connection-local; refresh durable history across all replicas.
+setInterval(() => {
+  if (document.hidden) return;
+  if (document.getElementById('page-history').classList.contains('active')) loadHistory();
+  else if (document.getElementById('page-home').classList.contains('active')) loadHome();
+}, 10000);
 </script>
 </body>
 </html>

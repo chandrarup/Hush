@@ -1,5 +1,17 @@
 # Hush
 
+## Milestone 5 GKE deployment
+
+The current cloud release runs on GKE Autopilot behind trusted HTTPS at
+[hush.34.36.104.111.nip.io](https://hush.34.36.104.111.nip.io).
+Application replicas are intentionally paused between demonstrations to save
+compute charges. Follow the [operator instructions](infra/milestone5/README.md)
+to resume two replicas and check readiness before a demo. Durable Cloud SQL,
+Cloud Storage, and Secret Manager resources are retained.
+
+See the [deployment evidence and remaining submission work](deliverables/Milestone5/START_HERE.md).
+The following Milestone 4 section documents the older VM rollback deployment.
+
 ## Milestone 4 managed-state cloud deployment
 
 The cloud VM is now disposable compute. Durable state lives outside the VM:

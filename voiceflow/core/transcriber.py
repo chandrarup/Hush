@@ -19,6 +19,8 @@ Config controls which engine is used:
   model = "large-v3-turbo"                 # for whisper
 """
 
+import os
+
 import numpy as np
 
 # ── Engine A: Parakeet via HuggingFace transformers ───────────────── #
@@ -138,6 +140,10 @@ class WhisperTranscriber:
 
         self.language = language
         self.beam_size = beam_size
+        try:
+            cpu_threads = min(max(int(os.getenv("HUSH_WHISPER_CPU_THREADS", "4")), 1), 16)
+        except ValueError:
+            cpu_threads = 4
 
         device, compute_type = _best_ctranslate_device()
         # Honour explicit config overrides
@@ -151,11 +157,11 @@ class WhisperTranscriber:
             f"on {device} ({compute_type})…"
         )
         try:
-            self.model = WhisperModel(model_name, device=device, compute_type=compute_type)
+            self.model = WhisperModel(model_name, device=device, compute_type=compute_type, cpu_threads=cpu_threads)
             print(f"[transcriber] Whisper '{model_name}' ready.")
         except Exception as e:
             print(f"[transcriber] GPU init failed ({e}), retrying on CPU…")
-            self.model = WhisperModel(model_name, device="cpu", compute_type="int8")
+            self.model = WhisperModel(model_name, device="cpu", compute_type="int8", cpu_threads=cpu_threads)
             print(f"[transcriber] Whisper '{model_name}' ready on CPU.")
 
     def transcribe(self, audio: np.ndarray, vocab: list[str] | None = None) -> str:

@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hush
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hush-runtime
+  namespace: hush
+  annotations:
+    iam.gke.io/gcp-service-account: hush-runtime@hush-milestone-2-20260922.iam.gserviceaccount.com
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hush-config
+  namespace: hush
+data:
+  GOOGLE_CLOUD_PROJECT: hush-milestone-2-20260922
+  HUSH_SERVER_MODE: cloud
+  HUSH_ALLOWED_HOSTS: hush.34.36.104.111.nip.io
+  HUSH_CLOUD_SQL_INSTANCE: hush-milestone-2-20260922:us-central1:hush-postgres-m4
+  HUSH_DB_NAME: hush
+  HUSH_DB_USER: hush_app
+  HUSH_DB_PASSWORD_SECRET: hush-db-password
+  HUSH_TEAM_TOKEN_SECRET: hush-team-token
+  HUSH_UPLOAD_BUCKET: hush-milestone-2-20260922-uploads
+  HUSH_DB_POOL_SIZE: '2'
+  HUSH_DB_MAX_OVERFLOW: '0'
+  HUSH_WHISPER_MODEL: /opt/hush-models/tiny.en
+  HUSH_WHISPER_BEAM_SIZE: '1'
+  HUSH_WHISPER_CPU_THREADS: '1'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+  HUSH_WARM_MODEL: '1'
+  HF_HUB_OFFLINE: '1'
+  HF_HUB_DISABLE_TELEMETRY: '1'

@@ -1,0 +1,36 @@
+Fri Oct 23 04:31:47 UTC 2026
+job.batch "hush-load" deleted from hush namespace
+deployment.apps/hush scaled
+pod/hush-79c8b8dd7f-b6qmb condition met
+pod/hush-79c8b8dd7f-mksmc condition met
+pod/hush-79c8b8dd7f-w2xlc condition met
+pod/hush-79c8b8dd7f-zrq7h condition met
+horizontalpodautoscaler.autoscaling/hush condition met
+NAME                   READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/hush   0/0     0            0           132m
+
+NAME                                       REFERENCE         TARGETS              MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/hush   Deployment/hush   cpu: <unknown>/60%   2         4         0          132m
+Application compute is paused. The retained load balancer and database still incur charges.
+deployment.apps/hush scaled
+Waiting for deployment "hush" rollout to finish: 0 out of 2 new replicas have been updated...
+Waiting for deployment "hush" rollout to finish: 0 of 2 updated replicas are available...
+Waiting for deployment "hush" rollout to finish: 1 of 2 updated replicas are available...
+deployment "hush" successfully rolled out
+horizontalpodautoscaler.autoscaling/hush condition met
+{"status":"ready","mode":"managed","checks":{"database":true,"storage":true,"secrets":true,"model":true}}HTTP/1.1 301 Moved Permanently
+Cache-Control: private
+Location: https://hush.34.36.104.111.nip.io:443/
+Content-Length: 0
+Date: Fri, 23 Oct 2026 04:37:37 GMT
+Content-Type: text/html; charset=UTF-8
+
+{"event": "load_started", "seconds": 1, "concurrency": 1}
+{"event": "load_finished", "responses": {"200": 1}}
+NAME                        READY   STATUS    RESTARTS   AGE
+pod/hush-79c8b8dd7f-ds9qk   1/1     Running   0          2m22s
+pod/hush-79c8b8dd7f-mvx74   1/1     Running   0          2m21s
+
+NAME                                       REFERENCE         TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/hush   Deployment/hush   cpu: 1%/60%   2         4         2          134m
+Ready for demo preflight at https://hush.34.36.104.111.nip.io/. Automatic transcription check passed.
