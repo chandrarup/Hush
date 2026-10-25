@@ -1,9 +1,25 @@
 # Hush Milestone 5: deployment and demo package
 
-Prepared October 22, 2026. Deployment verification continues October 23 UTC.
-Read [the live deployment report](LIVE_DEPLOYMENT.md) for actual results and
-pause/resume instructions. The two-slide PowerPoint and recorded video still
-need to be assembled; the detailed guides below are their preparation material.
+Updated October 25, 2026. Start with [the current demo run sheet](DEMO_RUN_SHEET.md)
+for the exact tabs, files, commands, and 9:45 sequence. Six submission artifacts,
+including the two-slide PowerPoint and half-page PDF, have been created in the
+sibling `Milestone 5` folder. The current application release is v3.0.2. The
+video still needs recording, and its fresh pod captures must be copied back into
+the final package. Follow [the four-proof recording checklist](SUBMISSION_CHECKLIST.md)
+before submitting; a static package alone does not complete the milestone.
+
+Read [the deployment report](LIVE_DEPLOYMENT.md) for historical v3.0.1 rehearsal
+results and [the hotkey verification](HOTKEY_FIX_VERIFICATION.md) for the later
+fix. Compute was paused after testing; resume and verify before a demo.
+
+Resume and pause in **Mac Terminal**, outside the timed video. Run the live
+demo commands in **Cloud Shell in Chrome**, with no Git clone. Use
+[the exact command sheet](DEMO_TERMINAL_COMMANDS.md), or
+[its Chrome page](http://127.0.0.1:57330/commands.html), for numbered copyable
+blocks and automatic pod selection. All other presentation content is displayed
+in Chrome: [slides](http://127.0.0.1:57330/slides.html),
+[analysis](http://127.0.0.1:57330/analysis.html), and
+[artifacts](http://127.0.0.1:57330/artifacts.html).
 
 ## Decisions already made
 
@@ -17,14 +33,18 @@ need to be assembled; the detailed guides below are their preparation material.
 - Keep the cluster configuration, hostname/certificate and managed data, but
   pause application replicas between rehearsals/demos. Restore two healthy
   replicas and autoscaling before each demo or agreed grading window.
-- Leave presenter names and assignments open. The recording guide is divided
-  into timed sections that can be assigned later.
+- Use three presenters: Presenter 1 covers both slides, Presenter 3 handles the
+  complete live demo, and Presenter 2 explains the written analysis and closes.
+  Speaking order is 1 → 3 → 2; names remain open. Read
+  [the three-presenter notes](THREE_PRESENTER_NOTES.md) for exact handoffs.
 - Retain the earlier milestones' detailed show/run/say/expected-result format,
   one visible terminal, camera-on presentation, consistent image identity, and
   separate final submission folder.
 
 ## Read in this order
 
+0. [Current demo run sheet](DEMO_RUN_SHEET.md): prepared screens, current release
+   checks, time allocations, commands, and which file fields to explain.
 1. [Implementation plan](Hush_Milestone5_Implementation_Plan.md): architecture,
    budget, application changes, build/deploy sequence, tests, and acceptance.
 2. [10-minute recording guide](Hush_Milestone5_10_Minute_Demo_Guide.md): setup,
@@ -34,8 +54,8 @@ need to be assembled; the detailed guides below are their preparation material.
 4. [Written analysis](Hush_Milestone5_Written_Analysis.md): evidence-based prose
    ready for the half-page PDF layout during final submission assembly.
 
-The Kubernetes resources now exist in cluster `hush-m5`. Use the final
-`v3.0.1` digest and `hush.34.36.104.111.nip.io` hostname. Resume and verify the
+The Kubernetes resources exist in cluster `hush-m5`. The local release manifest
+now selects `v3.0.2` and the hostname is `hush.34.36.104.111.nip.io`. Resume and verify the
 application before using the recording commands. The old VM is a retained
 rollback path, not the Milestone 5 runtime.
 
@@ -57,9 +77,12 @@ waiting times; show fresh live results; and package only the required artifacts.
 The previous guide targeted 9:45 to stay under a 10-minute ceiling. Preserve that
 target unless the course explicitly requires a different duration.
 
-## Final package to assemble after successful verification
+## Earlier package planning layout
 
-Create `SUBMISSION_READY/` only after the evidence is real. Its planned contents:
+The earlier proposed nested layout below is retained as planning context. The
+user requested the actual required artifacts as six flat files in the sibling
+`Milestone 5` folder instead. Keep presenter notes in this repository, and add
+the final video according to the course's submission instructions.
 
 | Folder | Contents |
 | --- | --- |

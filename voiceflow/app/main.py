@@ -45,6 +45,7 @@ _captured_context: dict = {}
 _session_lock           = threading.Lock()
 _listener               = None   # pynput Listener — kept alive in thread
 _recording_generation   = 0      # Distinguishes consecutive watchdog threads.
+_recording_starting     = False
 
 
 # ──────────────────────────────────────────────────────────────────── #
@@ -97,10 +98,10 @@ def _resolve_hotkey(key_name: str):
         return None
     special = {
         "ctrl_r":  _kb.Key.ctrl_r,  "ctrl_l":  _kb.Key.ctrl_l,
-        "ctrl":    _kb.Key.ctrl,    "alt_r":   _kb.Key.alt_r,
-        "alt_l":   _kb.Key.alt_l,   "alt":     _kb.Key.alt,
+        "ctrl":    "ctrl",         "alt_r":   _kb.Key.alt_r,
+        "alt_l":   _kb.Key.alt_l,   "alt":     "alt",
         "shift_r": _kb.Key.shift_r, "shift_l": _kb.Key.shift_l,
-        "cmd":     _kb.Key.cmd,     "cmd_r":   _kb.Key.cmd_r,
+        "cmd":     "cmd",          "cmd_r":   _kb.Key.cmd_r,
         "cmd_l":   _kb.Key.cmd_l,
         "f1":  _kb.Key.f1,  "f2":  _kb.Key.f2,  "f3":  _kb.Key.f3,
         "f4":  _kb.Key.f4,  "f5":  _kb.Key.f5,  "f6":  _kb.Key.f6,
@@ -124,12 +125,12 @@ def _keys_match(key, target) -> bool:
     if _PYNPUT:
         try:
             modifier_groups = (
-                {_kb.Key.ctrl, _kb.Key.ctrl_l, _kb.Key.ctrl_r},
-                {_kb.Key.alt, _kb.Key.alt_l, _kb.Key.alt_r},
-                {_kb.Key.shift, _kb.Key.shift_l, _kb.Key.shift_r},
-                {_kb.Key.cmd, _kb.Key.cmd_l, _kb.Key.cmd_r},
+                ("ctrl", {_kb.Key.ctrl_l, _kb.Key.ctrl_r}),
+                ("alt", {_kb.Key.alt_l, _kb.Key.alt_r}),
+                ("shift", {_kb.Key.shift_l, _kb.Key.shift_r}),
+                ("cmd", {_kb.Key.cmd_l, _kb.Key.cmd_r}),
             )
-            if any(key in group and target in group for group in modifier_groups):
+            if any(target == name and key in group for name, group in modifier_groups):
                 return True
         except Exception:
             pass
@@ -189,6 +190,14 @@ def _handle_partial(text: str) -> None:
     _api.push_event({"type": "partial_transcript", "text": text})
 
 
+def _set_activity_state(state: str) -> None:
+    """Publish one consistent state to polling, live events, and the native HUD."""
+    updated_at = time.time() * 1000
+    _api.update_state(status=state, status_updated_at=updated_at)
+    _platform.tray.get_tray().set_state(state)
+    _api.push_event({"type": "status", "value": state, "updated_at": updated_at})
+
+
 def _create_cloud_session(app_context: dict) -> CloudTranscriptionSession:
     settings = _cloud_settings()
     return CloudTranscriptionSession(
@@ -206,9 +215,8 @@ def _create_cloud_session(app_context: dict) -> CloudTranscriptionSession:
 def _finish_cloud_session(session: CloudTranscriptionSession) -> None:
     """Wait for the VM result, inject it once, and never run local ASR or cleanup."""
     global _cloud_session
-    tray = _platform.tray.get_tray()
     try:
-        tray.set_state("processing")
+        _set_activity_state("processing")
         result = session.finish()
         raw_text = str(result.get("raw", "")).strip()
         clean_text = str(result.get("text", "")).strip()
@@ -242,8 +250,7 @@ def _finish_cloud_session(session: CloudTranscriptionSession) -> None:
         with _session_lock:
             if _cloud_session is session:
                 _cloud_session = None
-        tray.set_state("idle")
-        _api.push_event({"type": "status", "value": "idle"})
+        _set_activity_state("idle")
 
 
 def _virtual_key_code(key) -> int | None:
@@ -258,13 +265,14 @@ def _macos_key_is_pressed(virtual_key: int) -> bool | None:
     if _platform.name != "macOS":
         return None
     try:
-        from Quartz import CGEventSourceKeyState, kCGEventSourceStateCombinedSessionState
+        from Quartz import CGEventSourceKeyState, kCGEventSourceStateHIDSystemState
 
         return bool(
-            CGEventSourceKeyState(kCGEventSourceStateCombinedSessionState, virtual_key)
+            CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, virtual_key)
         )
     except Exception:
-        return None
+        # On macOS, unavailable physical-state verification must not enable audio.
+        return False
 
 
 def _watch_for_hotkey_release(
@@ -324,10 +332,8 @@ def _stop_recording(expected_generation: int | None = None) -> bool:
         session = _cloud_session
 
     print("[main] STOPPED — waiting for the cloud result...")
-    tray = _platform.tray.get_tray()
     # Move the native HUD out of Listening before any potentially slow I/O.
-    tray.set_state("processing")
-    _api.push_event({"type": "status", "value": "processing"})
+    _set_activity_state("processing")
 
     try:
         if not _recorder:
@@ -343,14 +349,12 @@ def _stop_recording(expected_generation: int | None = None) -> bool:
         with _session_lock:
             if _cloud_session is session:
                 _cloud_session = None
-        tray.set_state("idle")
         _api.push_event({"type": "session_error", "message": str(exc)})
-        _api.push_event({"type": "status", "value": "idle"})
+        _set_activity_state("idle")
         return True
 
     if session is None:
-        tray.set_state("idle")
-        _api.push_event({"type": "status", "value": "idle"})
+        _set_activity_state("idle")
         return True
 
     threading.Thread(
@@ -366,27 +370,56 @@ def _stop_recording(expected_generation: int | None = None) -> bool:
 #  Hotkey callbacks                                                     #
 # ──────────────────────────────────────────────────────────────────── #
 
-def _on_press(key):
-    global _hotkey_pressed, _captured_context, _cloud_session, _recording_generation
-    if not _keys_match(key, _hotkey_target) or _hotkey_pressed:
+def _forward_recording_audio(chunk, session, virtual_key: int | None) -> None:
+    """Drop microphone blocks once the physical hotkey has been released."""
+    with _session_lock:
+        if not _hotkey_pressed or _cloud_session is not session:
+            return
+    if virtual_key is not None and _macos_key_is_pressed(virtual_key) is False:
+        return
+    session.send_audio(chunk)
+
+
+def _on_press(key, injected=False):
+    global _hotkey_pressed, _captured_context, _cloud_session, _recording_generation, _recording_starting
+    if injected or not _keys_match(key, _hotkey_target):
+        return
+    virtual_key = _virtual_key_code(key)
+    if virtual_key is not None and _macos_key_is_pressed(virtual_key) is False:
         return
 
     with _session_lock:
-        if _cloud_session is not None:
+        if _hotkey_pressed or _recording_starting or _cloud_session is not None:
             print("[main] Previous cloud transcription is still finishing.")
             return
+        _recording_starting = True
 
-    _captured_context  = _platform.context.get_active_context()
-    app_name = _captured_context.get("app", "unknown")
-    is_ai    = _captured_context.get("is_ai_chat", False)
     session = None
     try:
+        _captured_context = _platform.context.get_active_context()
+        app_name = _captured_context.get("app", "unknown")
+        is_ai = _captured_context.get("is_ai_chat", False)
         session = _create_cloud_session(_captured_context).start()
+        if virtual_key is not None and _macos_key_is_pressed(virtual_key) is False:
+            session.abort()
+            return
         if not _recorder:
             session.abort()
             raise CloudTranscriptionError("The microphone recorder is unavailable.")
-        _recorder.start(on_chunk=session.send_audio, retain_audio=False)
-    except (CloudTranscriptionError, RuntimeError) as exc:
+        _recorder.start(
+            on_chunk=lambda chunk: _forward_recording_audio(chunk, session, virtual_key),
+            retain_audio=False,
+        )
+        if virtual_key is not None and _macos_key_is_pressed(virtual_key) is False:
+            _recorder.stop()
+            session.abort()
+            return
+        with _session_lock:
+            _cloud_session = session
+            _hotkey_pressed = True
+            _recording_generation += 1
+            generation = _recording_generation
+    except Exception as exc:
         if session is not None:
             try:
                 session.abort()
@@ -399,23 +432,22 @@ def _on_press(key):
                 pass
         print(f"[main] Cannot start cloud dictation: {exc}")
         _api.push_event({"type": "session_error", "message": str(exc)})
-        _api.push_event({"type": "status", "value": "idle"})
-        _platform.tray.get_tray().set_state("idle")
+        _set_activity_state("idle")
         return
+    finally:
+        with _session_lock:
+            _recording_starting = False
 
-    with _session_lock:
-        _cloud_session = session
-        _hotkey_pressed = True
-        _recording_generation += 1
-        generation = _recording_generation
     print(f"[main] RECORDING TO CLOUD  app='{app_name}'" + (" [AI chat]" if is_ai else ""))
-    _platform.tray.get_tray().set_state("recording")
-    _api.push_event({"type": "status", "value": "recording"})
+    _set_activity_state("recording")
     _start_release_watchdog(key, generation)
 
 
-def _on_release(key):
-    if not _keys_match(key, _hotkey_target) or not _hotkey_pressed:
+def _on_release(key, injected=False):
+    if injected or not _keys_match(key, _hotkey_target) or not _hotkey_pressed:
+        return
+    virtual_key = _virtual_key_code(key)
+    if virtual_key is not None and _macos_key_is_pressed(virtual_key) is True:
         return
     _stop_recording()
 

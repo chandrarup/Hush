@@ -1,5 +1,15 @@
 # Hush Milestone 5 deployment report
 
+**October 25 preparation update:** the application Deployment selects v3.0.2,
+digest `sha256:946ba2c9d177aeade0a8980db8559692abc9a0e42ba773054eca00c83c30650d`.
+The application was paused at zero replicas during the submission audit and its
+ManagedCertificate remained Active. Read `HOTKEY_FIX_VERIFICATION.md` for the
+verified later client/dashboard fix and `SUBMISSION_CHECKLIST.md` for recording
+requirements. The original report below is historical v3.0.1 rehearsal evidence.
+It does not claim that the final v3.0.2 video has been recorded.
+
+## Historical deployment and rehearsal report
+
 Verified October 22–23, 2026. This report separates deployed behavior from the
 slides and video that still need to be produced.
 

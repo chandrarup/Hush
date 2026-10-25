@@ -1104,7 +1104,12 @@ document.getElementById('btn-save-settings').addEventListener('click', async () 
 });
 
 // ── Status dot ───────────────────────────────────────────────────── //
-function updateStatusDot(status) {
+let latestStatusTimestamp = -1;
+function updateStatusDot(status, updatedAt = 0) {
+  if (!['idle', 'recording', 'processing'].includes(status)) return;
+  const timestamp = Number(updatedAt) || 0;
+  if (timestamp < latestStatusTimestamp) return;
+  latestStatusTimestamp = timestamp;
   const dot = document.getElementById('status-dot');
   const txt = document.getElementById('status-text');
   dot.className = 'status-dot ' + (status !== 'idle' ? status : '');
@@ -1134,7 +1139,7 @@ let eventController = null;
 let reconnectTimer = null;
 
 function handleServerEvent(event) {
-  if (event.type === 'status') updateStatusDot(event.value);
+  if (event.type === 'status') updateStatusDot(event.value, event.updated_at);
   if (event.type === 'live_session') updateLiveSession(event.session);
   if (event.type === 'partial_transcript') {
     const transcript = document.getElementById('live-transcript');
@@ -1216,7 +1221,7 @@ window.addEventListener('beforeunload', () => {
 setInterval(async () => {
   try {
     const s = await apiFetch(API+'/status').then(r=>r.json());
-    updateStatusDot(s.status);
+    updateStatusDot(s.status, s.status_updated_at);
   } catch(e) {}
 }, 2000);
 // Events are connection-local; refresh durable history across all replicas.

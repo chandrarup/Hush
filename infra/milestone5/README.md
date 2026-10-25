@@ -18,6 +18,20 @@ trusted HTTPS readiness; perform a short authenticated upload or native
 dictation before declaring the demo ready. The shared team token is supplied
 privately through the existing client/dashboard authentication flow.
 
+Open cloud history using the local launcher `Open Hush Cloud Dashboard.command`
+in the repository root, or run:
+
+```bash
+.venv/bin/python scripts/open_cloud_dashboard.py
+```
+
+The launcher checks readiness and the existing saved team token before opening
+a fresh authenticated browser tab. It never prints the token. Select History
+in that cloud tab. The local desktop dashboard is for controls and permissions;
+it deliberately omits cloud history. Keep the authenticated cloud tab open.
+Refreshing that tab preserves login, but entering the plain URL in a new tab
+does not. Run the launcher again when opening a new cloud dashboard.
+
 After the agreed demo/grading window:
 
 ```bash
