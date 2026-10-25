@@ -85,6 +85,7 @@ def _configured_whisper_beam_size() -> int:
 # ── Shared state (updated by main.py) ─────────────────────────────── #
 _state: dict[str, Any] = {
     "status":        "idle",       # idle | recording | processing
+    "status_updated_at": 0,        # Startup Idle must not override another replica's activity.
     "cleanup_level": "light",      # none | light | medium | high
     "hotkey":        "ctrl_l",
     "asr_engine":    "whisper",
@@ -94,6 +95,8 @@ _state: dict[str, Any] = {
 
 def update_state(**kwargs):
     """Thread-safe state update called from main.py."""
+    if "status" in kwargs:
+        kwargs.setdefault("status_updated_at", time.time() * 1000)
     _state.update(kwargs)
 
 
@@ -364,6 +367,8 @@ def push_event(event: dict):
     Thread-safe — called from the pipeline thread.
     """
     global _event_loop
+    if event.get("type") == "status" and "updated_at" not in event:
+        event = {**event, "updated_at": _state.get("status_updated_at", 0)}
     if _event_loop is None or _event_loop.is_closed():
         return
 

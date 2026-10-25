@@ -36,7 +36,7 @@ spec:
               app: hush
       containers:
         - name: hush
-          image: us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:4181321233914f477451388a53ae5aa8af556221afb2b82cf979057345e6559d
+          image: us-central1-docker.pkg.dev/hush-milestone-2-20260922/hush-containers/hush@sha256:946ba2c9d177aeade0a8980db8559692abc9a0e42ba773054eca00c83c30650d
           args: ['uvicorn', 'voiceflow.web.api_server:app', '--host', '0.0.0.0', '--port', '57327', '--no-access-log', '--timeout-graceful-shutdown', '75']
           command: ['/app/.venv/bin/python', '-m']
           ports:

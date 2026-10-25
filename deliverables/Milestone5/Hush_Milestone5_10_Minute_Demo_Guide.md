@@ -1,8 +1,10 @@
 # Hush Milestone 5: 10-minute recording guide
 
-**Recording preparation.** These resource names now match the deployed
-`v3.0.1` environment. Read `LIVE_DEPLOYMENT.md` for measured rehearsal results.
-The video itself still needs to be recorded, including live deletion and scaling.
+**Recording preparation, updated October 25.** Use [the current run sheet](DEMO_RUN_SHEET.md)
+for the tab order, revised 9:45 schedule, commands, and release-alignment checks.
+The current local manifests select `v3.0.2`; its changes still need publication
+at preparation time. `LIVE_DEPLOYMENT.md` and the earlier rehearsal evidence
+describe `v3.0.1`. The video itself still needs live deletion and scaling.
 Presenter assignments are intentionally open; assign these sections later.
 
 ## Timing and recording rules
@@ -41,7 +43,7 @@ not as a substitute for visibly showing the replica count change.
    warm-up transcription. The two-replica minimum applies while the demo is live.
 2. Provision HTTPS at least a day earlier. The certificate must already say
    **Active**, and the exact final hostname must work on the recording network.
-3. Freeze one deployed commit, `v3.0.1` image tag and actual digest. Prepare a
+3. Freeze one published deployed commit, `v3.0.2` image tag and actual digest. Prepare a
    release card containing project, cluster, region, namespace, hostname, commit,
    image tag/digest, and evidence date. No credentials belong on this card.
 4. Authenticate the browser privately. Confirm history loads, the token is gone
@@ -59,7 +61,7 @@ not as a substitute for visibly showing the replica count change.
    run a destructive demo against whichever cluster happens to be current.
 8. Remove the completed rehearsal load Job before the timer starts. Preserve
    its useful logs elsewhere. Confirm no load generator remains running.
-9. Open windows in this order: the two-slide PowerPoint; authenticated HTTPS
+9. Open windows in this order: the two-slide Chrome slides tab; authenticated HTTPS
    dashboard; browser certificate details; GKE certificate status; one terminal;
    GitHub submitted commit/manifests; half-page analysis. Close secret/billing
    pages. Keep cameras visible during each speaker's portion under the inherited
@@ -152,9 +154,8 @@ certificate, and GKE reports the application's certificate as Active.”
 **Run in the prepared terminal:**
 
 ```bash
-curl -sS -o /dev/null -D - "http://${HUSH_HOSTNAME}/" \
+curl --connect-timeout 10 --max-time 15 -sS -o /dev/null -D - "http://${HUSH_HOSTNAME}/" \
   | tee "$HUSH_EVIDENCE_DIR/http-redirect.txt"
-curl -fsS "https://${HUSH_HOSTNAME}/health"
 ```
 
 **Expected:** HTTP response 301; `Location` starts with the same hostname over
@@ -180,12 +181,9 @@ permits. Never describe a file upload as live microphone capture.
 **Run:**
 
 ```bash
-date -u
-kubectl -n hush get deployment hush
-kubectl -n hush get pods -l app=hush -o wide \
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get deployment hush
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pods -l app=hush -o wide \
   | tee "$HUSH_EVIDENCE_DIR/pods-before.txt"
-kubectl -n hush get pods -l app=hush \
-  -o custom-columns='NAME:.metadata.name,UID:.metadata.uid,READY:.status.containerStatuses[*].ready'
 ```
 
 **Expected:** At least two application Pods Running and Ready, with the
@@ -199,14 +197,31 @@ and UIDs identify separate Pods. I will now delete exactly one existing Pod.
 The Deployment still requests two replicas, so its controller should create
 a replacement automatically.”
 
-**Select a non-terminating Ready Pod before recording or copy its live name
-now; set only that name. Show it and delete it normally:**
+**Paste the automatic selection/deletion block below in Cloud Shell. No pod name needs copying:**
 
 ```bash
-HUSH_DELETE_POD='COPY_ONE_EXISTING_READY_HUSH_POD_NAME'
-kubectl -n hush get pod "$HUSH_DELETE_POD" -o wide
-kubectl -n hush delete pod "$HUSH_DELETE_POD" --wait=false
-kubectl -n hush get pods -l app=hush -o wide --watch
+HUSH_DELETE_POD="$(
+  kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pods -l app=hush -o json |
+  python3 -c '
+import json, sys
+pods = [p for p in json.load(sys.stdin)["items"]
+        if not p["metadata"].get("deletionTimestamp")
+        and p.get("status", {}).get("phase") == "Running"
+        and any(c.get("type") == "Ready" and c.get("status") == "True"
+                for c in p.get("status", {}).get("conditions", []))]
+if len(pods) != 2:
+    sys.exit("Stopped: exactly two healthy application pods are required. Finish preflight first.")
+print(min(pods, key=lambda p: (p["metadata"].get("creationTimestamp", ""), p["metadata"]["name"]))["metadata"]["name"])
+'
+)"
+if [ -n "$HUSH_DELETE_POD" ]; then
+  printf 'Automatically selected pod: %s\n' "$HUSH_DELETE_POD"
+  kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pod "$HUSH_DELETE_POD" -o wide
+  if kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush delete pod "$HUSH_DELETE_POD" --wait=false; then
+    kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pods -l app=hush -o wide --watch \
+      | tee "$HUSH_EVIDENCE_DIR/pod-replacement-watch.txt"
+  fi
+fi
 ```
 
 **Do:** Leave the command and live watch visible. Point to the new name and its
@@ -235,8 +250,31 @@ or unready replacement does not complete this proof.
 **Run the planned, previously tested Job manifest:**
 
 ```bash
-kubectl -n hush apply -f infra/milestone5/demo/load-job.yaml
-kubectl -n hush get hpa hush
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get hpa hush \
+  | tee "$HUSH_EVIDENCE_DIR/hpa-before.txt"
+export HUSH_LOAD_IMAGE="$(kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get deployment hush -o jsonpath='{.spec.template.spec.containers[0].image}')"
+python3 - <<'HUSH_JOB' | kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush apply -f -
+import json, os, sys
+image = os.environ.get("HUSH_LOAD_IMAGE", "")
+if not image:
+    sys.exit("Stopped: could not read the deployed application image.")
+container = {"name": "load", "image": image, "command": ["python", "scripts/milestone5_load.py"],
+             "envFrom": [{"configMapRef": {"name": "hush-config"}}],
+             "env": [{"name": k, "value": v} for k, v in {
+                 "HUSH_LOAD_TARGET": "http://hush.hush.svc.cluster.local",
+                 "HUSH_PUBLIC_HOST": "hush.34.36.104.111.nip.io",
+                 "HUSH_LOAD_SECONDS": "180", "HUSH_LOAD_CONCURRENCY": "4"}.items()],
+             "resources": {"requests": {"cpu": "250m", "memory": "512Mi"},
+                           "limits": {"cpu": "250m", "memory": "512Mi"}}}
+pod = {"restartPolicy": "Never", "serviceAccountName": "hush-runtime",
+       "securityContext": {"runAsNonRoot": True, "runAsUser": 10001, "runAsGroup": 10001},
+       "containers": [container]}
+print(json.dumps({"apiVersion": "batch/v1", "kind": "Job",
+                  "metadata": {"name": "hush-load", "namespace": "hush", "labels": {"app": "hush-load"}},
+                  "spec": {"backoffLimit": 0, "activeDeadlineSeconds": 240,
+                           "ttlSecondsAfterFinished": 3600,
+                           "template": {"metadata": {"labels": {"app": "hush-load"}}, "spec": pod}}}))
+HUSH_JOB
 ```
 
 **Say:**
@@ -251,10 +289,10 @@ and autoscaler after they have had time to respond.”
 **Run:**
 
 ```bash
-curl -fsS "https://${HUSH_HOSTNAME}/health"
-curl -fsS "https://${HUSH_HOSTNAME}/ready"
-kubectl -n hush get deployment hush \
-  -o jsonpath='{range .spec.template.spec.containers[*]}{.name}{"\nliveness: "}{.livenessProbe.httpGet.path}{"\nreadiness: "}{.readinessProbe.httpGet.path}{"\nstartup: "}{.startupProbe.httpGet.path}{"\n"}{end}'
+curl --connect-timeout 10 --max-time 15 -fsS "https://${HUSH_HOSTNAME}/health"
+printf '\n'
+curl --connect-timeout 10 --max-time 15 -fsS "https://${HUSH_HOSTNAME}/ready"
+printf '\n'
 ```
 
 **Expected:** `/health` reports alive. `/ready` reports managed mode and healthy
@@ -292,10 +330,9 @@ when the browser request reaches a different replica.”
 **Run:**
 
 ```bash
-date -u
-kubectl -n hush get pods -l app=hush -o wide \
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pods -l app=hush -o wide \
   | tee "$HUSH_EVIDENCE_DIR/pods-after.txt"
-kubectl -n hush get deployment hush
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get deployment hush
 ```
 
 **Point:** Identify the Ready replacement and check the original Pod's actual
@@ -311,12 +348,12 @@ demonstrations remain distinguishable.
 **Run:**
 
 ```bash
-kubectl -n hush top pods -l app=hush
-kubectl -n hush get hpa hush
-kubectl -n hush describe hpa hush \
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush top pods -l app=hush
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get hpa hush
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush describe hpa hush \
   | tee "$HUSH_EVIDENCE_DIR/hpa-events.txt"
-kubectl -n hush get deployment hush
-kubectl -n hush get pods -l app=hush -o wide
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get deployment hush
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pods -l app=hush -o wide
 ```
 
 If scaling is still occurring, show `kubectl -n hush get hpa hush --watch`, then
@@ -350,8 +387,7 @@ files: Deployment, Service, Ingress, HPA, PDB. Open PDB and Deployment strategy.
 **Run if terminal proof is clearer:**
 
 ```bash
-kubectl -n hush get pdb hush
-kubectl -n hush describe pdb hush
+kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pdb hush
 ```
 
 **Say:**
