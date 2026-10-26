@@ -71,7 +71,7 @@ pod-name placeholder. It refuses to delete if selection fails.
 ```bash
 HUSH_DELETE_POD="$(
   kubectl --context=gke_hush-milestone-2-20260922_us-central1_hush-m5 -n hush get pods -l app=hush -o json |
-  .venv/bin/python -c '
+  python3 -c '
 import json, sys
 pods = [p for p in json.load(sys.stdin)["items"]
         if not p["metadata"].get("deletionTimestamp")

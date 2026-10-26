@@ -307,7 +307,10 @@ def _clean_cloud_transcript(raw_text: str, cleanup_level: str, app_name: str | N
         return expand_snippets(raw_text, snippets)
 
     if managed_state_enabled():
-        saved_settings = get_managed_state().get_settings()
+        try:
+            saved_settings = get_managed_state().get_settings()
+        except ManagedStateError:
+            saved_settings = _state
         config = {
             "llm": {
                 **DEFAULT_CONFIG.get("llm", {}),
@@ -499,7 +502,12 @@ if _FASTAPI_OK:
 
     @app.get("/status")
     async def get_status():
-        saved = await asyncio.to_thread(get_managed_state().get_settings) if managed_state_enabled() else {}
+        saved = {}
+        if managed_state_enabled():
+            try:
+                saved = await asyncio.to_thread(lambda: get_managed_state().get_settings())
+            except ManagedStateError:
+                pass
         return {**_state, **saved, "live_sessions": _cloud_sessions_snapshot()}
 
     @app.post("/transcribe")
