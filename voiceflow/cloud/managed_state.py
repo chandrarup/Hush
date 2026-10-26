@@ -11,10 +11,24 @@ import json
 import os
 import re
 import threading
+import time
+import socket
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path, PurePath
 from typing import Any
+
+
+class _BoundedConnectorSocket:
+    """Apply a TCP/TLS timeout to the connector's synchronous socket path only."""
+
+    def create_connection(self, address, timeout=2, *args, **kwargs):
+        """Bound connection establishment and retain the timeout for TLS negotiation."""
+        return socket.create_connection(address, timeout=timeout, *args, **kwargs)
+
+    def __getattr__(self, name):
+        """Delegate socket constants and types required by the connector."""
+        return getattr(socket, name)
 
 
 class ManagedStateError(RuntimeError):
@@ -76,6 +90,9 @@ class ManagedState:
         self._storage_client: Any | None = None
         self._bucket: Any | None = None
         self._team_token: str | None = None
+        self._settings_lock = threading.RLock()
+        self._settings_cache: dict[str, Any] | None = None
+        self._settings_cached_at = 0.0
         self._ready = False
 
     @property
@@ -113,6 +130,8 @@ class ManagedState:
 
         database_password = self._access_secret(self.database_password_secret)
         self._team_token = self._access_secret(self.team_token_secret)
+        import google.cloud.sql.connector.connector as connector_module
+        connector_module.socket = _BoundedConnectorSocket()
         self._connector = Connector(refresh_strategy="LAZY", timeout=5)
 
         def connect() -> Any:
@@ -156,6 +175,9 @@ class ManagedState:
         return self
 
     def close(self) -> None:
+        """Release managed connections and discard cached settings."""
+        self._settings_cache = None
+        self._settings_cached_at = 0.0
         self._ready = False
         if self._engine is not None:
             self._engine.dispose()
@@ -382,19 +404,30 @@ class ManagedState:
     def get_settings(self) -> dict[str, Any]:
         from sqlalchemy import text
 
-        with self._require_engine().connect() as connection:
-            rows = connection.execute(text("SELECT key, value FROM app_settings")).fetchall()
-        return {row.key: row.value for row in rows}
+        with self._settings_lock:
+            if self._settings_cache is not None and time.monotonic() - self._settings_cached_at < 2:
+                return dict(self._settings_cache)
+            try:
+                with self._require_engine().connect() as connection:
+                    rows = connection.execute(text("SELECT key, value FROM app_settings")).fetchall()
+            except Exception as exc:
+                raise ManagedStateError("Could not read managed settings.") from exc
+            self._settings_cache = {row.key: row.value for row in rows}
+            self._settings_cached_at = time.monotonic()
+            return dict(self._settings_cache)
 
     def set_setting(self, key: str, value: Any) -> None:
         from sqlalchemy import text
 
-        with self._require_engine().begin() as connection:
-            connection.execute(text(
-                "INSERT INTO app_settings (key, value) VALUES (:key, CAST(:value AS JSONB)) "
-                "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, "
-                "updated_at=CURRENT_TIMESTAMP"
-            ), {"key": key, "value": json.dumps(value)})
+        with self._settings_lock:
+            with self._require_engine().begin() as connection:
+                connection.execute(text(
+                    "INSERT INTO app_settings (key, value) VALUES (:key, CAST(:value AS JSONB)) "
+                    "ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, "
+                    "updated_at=CURRENT_TIMESTAMP"
+                ), {"key": key, "value": json.dumps(value)})
+            self._settings_cache = None
+
 
     # Uploads ---------------------------------------------------------
     def store_upload(self, payload: bytes, original_filename: str | None) -> dict[str, Any]:

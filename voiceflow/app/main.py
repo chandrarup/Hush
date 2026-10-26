@@ -373,7 +373,8 @@ def _stop_recording(expected_generation: int | None = None) -> bool:
 def _forward_recording_audio(chunk, session, virtual_key: int | None) -> None:
     """Drop microphone blocks once the physical hotkey has been released."""
     with _session_lock:
-        if not _hotkey_pressed or _cloud_session is not session:
+        if not ((_hotkey_pressed and _cloud_session is session)
+                or (_recording_starting and _cloud_session is None)):
             return
     if virtual_key is not None and _macos_key_is_pressed(virtual_key) is False:
         return

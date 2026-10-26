@@ -48,6 +48,16 @@ def main() -> None:
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
         list(executor.map(lambda _: worker(), range(concurrency)))
     print(json.dumps({"event": "load_finished", "responses": counts}), flush=True)
+    validate_results(counts)
+
+
+def validate_results(counts: dict[str, int]) -> None:
+    """Reject degraded runs while allowing expected busy responses."""
+    if counts.get("transport_error") or any(
+        count and code.isdigit() and 500 <= int(code) < 600
+        for code, count in counts.items()
+    ):
+        raise SystemExit("Load failed: transport or server errors occurred")
     if not counts.get("200"):
         raise SystemExit("No successful transcription requests")
 

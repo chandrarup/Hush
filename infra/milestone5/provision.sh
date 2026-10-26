@@ -13,7 +13,12 @@ if ! gcloud compute networks subnets describe hush-subnet --region="$REGION" --p
   gcloud compute networks subnets update hush-subnet --region="$REGION" --project="$PROJECT" --add-secondary-ranges=hush-m5-pods=10.30.0.0/16,hush-m5-services=10.31.0.0/20 --quiet
 fi
 if ! gcloud compute addresses describe hush-m5-ip --global --project="$PROJECT" >/dev/null 2>&1; then
-  gcloud compute addresses create hush-m5-ip --global --ip-version=IPV4 --project="$PROJECT" --quiet
+  gcloud compute addresses create hush-m5-ip --global --addresses=34.36.104.111 --ip-version=IPV4 --project="$PROJECT" --quiet
+fi
+HUSH_RESERVED_IP="$(gcloud compute addresses describe hush-m5-ip --global --project="$PROJECT" --format='value(address)')"
+if [[ "$HUSH_RESERVED_IP" != '34.36.104.111' ]]; then
+  echo 'Reserved IP does not match the committed hostname; refusing deployment.' >&2
+  exit 1
 fi
 if ! gcloud container clusters describe hush-m5 --region="$REGION" --project="$PROJECT" >/dev/null 2>&1; then
   gcloud container clusters create-auto hush-m5 --region="$REGION" --project="$PROJECT" \

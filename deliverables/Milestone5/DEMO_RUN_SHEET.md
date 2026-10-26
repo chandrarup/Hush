@@ -29,8 +29,8 @@ Resume and pause using the existing Mac scripts, outside the recording. Run the
 live Kubernetes commands in Google Cloud Shell in Chrome. No Git clone is
 needed: [the command page](http://127.0.0.1:57330/commands.html) includes an inline
 load Job that uses the currently deployed image. It also selects a healthy pod
-automatically. Only the connection and evidence-directory setup run in Cloud
-Shell before recording.
+automatically. Before recording, Cloud Shell also removes old load Jobs and checks the
+Deployment, Pods, HPA, and certificate to establish the clean baseline.
 
 ## Open these screens in this order
 

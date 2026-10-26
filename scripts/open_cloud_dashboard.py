@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
-import tomllib
+import toml
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -23,8 +23,8 @@ def settings() -> tuple[str, str]:
     source = Path(__file__).resolve().parents[1] / "data/config.toml"
     path = packaged if packaged.is_file() else source
     try:
-        cloud = tomllib.loads(path.read_text()).get("cloud", {})
-    except (OSError, tomllib.TOMLDecodeError):
+        cloud = toml.loads(path.read_text()).get("cloud", {})
+    except (OSError, toml.TomlDecodeError):
         raise ValueError("Cannot read your Hush configuration. Complete Hush setup first.") from None
     base = str(cloud.get("base_url", "")).strip().rstrip("/")
     token = str(cloud.get("token", "")).strip()

@@ -9,7 +9,7 @@ Console logs have normalized line endings and trailing whitespace for Git.
 | --- | --- |
 | `certificate-active.png`, `certificate-active.yaml` | Matching nip.io managed certificate is Active; PNG is the real Google Cloud console. |
 | `pods-before.txt`, `deletion-command.txt`, `pod-replacement-watch.txt`, `pods-after.txt` | Actual existing pod deletion and automatic replacement. The after snapshot was collected later, so Pod ages advance. |
-| `hpa-before.txt`, `hpa-watch.txt`, `hpa-returned-to-two.json` | Final-release automatic scale-up from two to four, then scale-down to two. Watch includes both final-release load rehearsals. |
+| `hpa-before.txt`, `hpa-watch.txt`, `hpa-returned-to-two.json` | Historical v3.0.1 scaling evidence. `hpa-watch.txt` shows the observed return to two; `hpa-returned-to-two.json` captures pending scale-down with three current replicas. |
 | `load-job-short-demo.txt`, `short-load-four-replicas.txt`, `hpa-after-short-load.yaml`, `pods-after-short-load.txt`, `hpa-events.txt` | Final eight-second audio rehearsal: 374 successes, 82 busy responses, no transport errors or 5xx; scale-up to four healthy replicas. |
 | `heavy-stress-v3.0.1/` | Separate saturation test with 48-second clips: 5 successful requests, 109 busy responses, 11 transport errors/timeouts. Preserve this limitation. |
 | `pdb-eviction-test.json`, `pods-after-pdb-test.txt` | First eviction admitted; immediate second eviction rejected by PDB; replacement subsequently became Ready. |

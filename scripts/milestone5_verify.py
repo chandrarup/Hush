@@ -19,6 +19,8 @@ def main() -> None:
     parser.add_argument('--host', required=True)
     parser.add_argument('--sample', type=Path, required=True)
     args = parser.parse_args()
+    if args.host != "hush.34.36.104.111.nip.io":
+        parser.error("--host must match the trusted Milestone 5 release hostname")
     token = subprocess.check_output([
         'gcloud', 'secrets', 'versions', 'access', 'latest',
         '--secret=hush-team-token', '--project=hush-milestone-2-20260922',
@@ -32,7 +34,7 @@ def main() -> None:
     response = requests.post(base + '/transcribe', data=args.sample.read_bytes(),
                              headers={**headers, 'Content-Type': 'audio/wav',
                                       'X-Hush-Filename': 'milestone5-https-verification.wav'},
-                             timeout=90)
+                             timeout=90, allow_redirects=False)
     response.raise_for_status()
     result = response.json()
     assert result.get('text') and result.get('history_id'), 'Upload did not produce saved speech'
@@ -48,7 +50,7 @@ def main() -> None:
     final = session.finish()
     assert final.get('text'), 'WSS did not return a transcript'
     print(json.dumps({'wss_result': final, 'latency_ms': session.latency_metrics}), flush=True)
-    history = requests.get(base + '/history?limit=50', headers=headers, timeout=20)
+    history = requests.get(base + '/history?limit=50', headers=headers, timeout=20, allow_redirects=False)
     history.raise_for_status()
     assert any(entry['id'] == result['history_id'] for entry in history.json())
     assert requests.get(base + '/history', timeout=20).status_code == 401

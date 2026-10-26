@@ -2,9 +2,9 @@
 
 **Recording preparation, updated October 25.** Use [the current run sheet](DEMO_RUN_SHEET.md)
 for the tab order, revised 9:45 schedule, commands, and release-alignment checks.
-The current local manifests select `v3.0.2`; its changes still need publication
-at preparation time. `LIVE_DEPLOYMENT.md` and the earlier rehearsal evidence
-describe `v3.0.1`. The video itself still needs live deletion and scaling.
+The deployed application and current manifests select `v3.0.2`.
+`LIVE_DEPLOYMENT.md` records that release; the earlier `v3.0.1` captures are
+historical rehearsal evidence. The video itself still needs live deletion and scaling.
 Presenter assignments are intentionally open; assign these sections later.
 
 ## Timing and recording rules
