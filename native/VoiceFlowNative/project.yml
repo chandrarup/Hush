@@ -1,0 +1,37 @@
+name: VoiceFlowNative
+options:
+  bundleIdPrefix: com.voiceflow
+  createIntermediateGroups: true
+settings:
+  base:
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    SWIFT_VERSION: "5.9"
+    PRODUCT_BUNDLE_IDENTIFIER: com.voiceflow.app
+    INFOPLIST_KEY_CFBundleDisplayName: VoiceFlow
+    INFOPLIST_KEY_NSMicrophoneUsageDescription: VoiceFlow needs microphone access to capture speech.
+    INFOPLIST_KEY_NSAppleEventsUsageDescription: VoiceFlow needs Accessibility access to type text into other apps.
+    INFOPLIST_KEY_LSUIElement: YES
+    CODE_SIGN_STYLE: Automatic
+targets:
+  VoiceFlowNative:
+    type: application
+    platform: macOS
+    sources:
+      - Sources
+    settings:
+      base:
+        PRODUCT_NAME: VoiceFlow
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies: []
+    scheme:
+      testTargets:
+        - VoiceFlowNativeTests
+  VoiceFlowNativeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.voiceflow.app.tests
