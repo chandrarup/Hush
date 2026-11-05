@@ -21,10 +21,10 @@ steps:
       - |
         apt-get update -qq
         apt-get install -y -qq --no-install-recommends \
-          build-essential linux-libc-dev libgomp1 libportaudio2
+          build-essential linux-libc-dev libgomp1 libportaudio2 xvfb xauth
         python -m pip install --disable-pip-version-check --no-cache-dir uv==0.8.22
         uv sync --frozen --group dev
-        uv run --frozen pytest -q \
+        xvfb-run -a uv run --frozen pytest -q \
           tests/test_observability.py tests/test_managed_state.py \
           tests/test_cloud_transcription.py tests/test_web_transcription_api.py \
           tests/test_orchestration_probes.py tests/test_storage_paths.py \
