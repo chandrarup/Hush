@@ -1,6 +1,6 @@
 substitutions:
   _DEPLOY_BRANCH: milestone6-deploy
-  _FORCE_HEALTH_FAILURE: '1'
+  _FORCE_HEALTH_FAILURE: '0'
 
 steps:
   - id: preflight
