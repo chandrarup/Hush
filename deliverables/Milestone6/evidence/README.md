@@ -17,3 +17,13 @@ contains 18 resource addresses. The plan output contains resource identifiers
 but no secret values or recipient address. This proves no drift for the 18
 resources managed in this module at that time; it does not cover documented
 Terraform exceptions or the later CI/CD trigger.
+
+## Updated Terraform plan and corrected metric — November 5, 2026
+
+`terraform-no-change-2026-11-05.txt` is a second live refreshed plan after
+the build-account IAM and Kubernetes RBAC setup. `terraform fmt -check` and
+`terraform validate` passed; the plan exited **0** with `No changes.` Its
+scope remains the 18 imported resources and documented exceptions.
+
+`../PHASE6_LIVE_METRIC_2026-11-05.md` records the single authenticated 503,
+matching structured log, Monitoring count of one, and healthy final state.

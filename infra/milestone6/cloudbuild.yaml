@@ -20,7 +20,8 @@ steps:
       - -euc
       - |
         apt-get update -qq
-        apt-get install -y -qq --no-install-recommends libgomp1 libportaudio2
+        apt-get install -y -qq --no-install-recommends \
+          build-essential linux-libc-dev libgomp1 libportaudio2
         python -m pip install --disable-pip-version-check --no-cache-dir uv==0.8.22
         uv sync --frozen --group dev
         uv run --frozen pytest -q \
