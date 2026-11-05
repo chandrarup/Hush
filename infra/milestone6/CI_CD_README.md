@@ -9,7 +9,9 @@ release is separate evidence.
 
 1. Rejects a missing/non-Git commit SHA, wrong project, or wrong deployment
    branch before tests and build.
-2. Runs 50 cloud and pipeline-focused tests using the locked Python dependencies.
+2. Runs 45 headless cloud, container, and pipeline tests using the locked
+   Python dependencies, with a four-minute timeout. The full desktop-inclusive
+   suite remains a separate local gate.
 3. Builds and pushes `hush:<full commit SHA>` to the existing Artifact Registry
    repository, then resolves the pushed tag to an immutable digest.
 4. Records the current Deployment revision and image digest. One strategic
