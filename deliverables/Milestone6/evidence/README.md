@@ -27,3 +27,14 @@ scope remains the 18 imported resources and documented exceptions.
 
 `../PHASE6_LIVE_METRIC_2026-11-05.md` records the single authenticated 503,
 matching structured log, Monitoring count of one, and healthy final state.
+
+## Trigger and rollback — November 5, 2026
+
+`terraform-no-change-after-trigger-2026-11-05.txt` is the refreshed live plan
+after the Cloud Build GitHub connection and branch trigger were added. It
+exited **0** with no changes for the 18 Terraform-managed resources. The
+trigger and its IAM/RBAC are documented Terraform exceptions.
+
+`../PHASE7_TRIGGER_ROLLBACK_2026-11-05.md` records the exact branch, trigger,
+three build IDs, Git commit SHAs, immutable digests, Kubernetes revisions,
+rollback checks, and direct screenshot links.

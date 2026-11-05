@@ -1,9 +1,14 @@
-# Milestone 6 Cloud Build release pipeline — local implementation checkpoint
+# Milestone 6 Cloud Build release pipeline — live validation
 
-`cloudbuild.yaml` and `deploy_release.sh` are implemented locally, but **no
-branch trigger, IAM grant, Kubernetes RBAC binding, or Cloud Build release has
-been created or run for this pipeline**. The existing manual Milestone 6 image
-release is separate evidence.
+The `milestone6-deploy` branch in `chandrarup/Hush` has an active Cloud Build
+push trigger (`hush-milestone6-deploy`, ID
+`868940d9-816c-454a-bd76-475c26a8dcad`) connected through the repository
+owner's `hush-github-owner` connection. It reads this YAML and runs as
+`hush-build@hush-milestone-2-20260922.iam.gserviceaccount.com`. On November 5,
+2026, a normal push succeeded, a controlled failure invoked and verified
+automatic rollback, and a healthy follow-up push succeeded. Exact run IDs,
+digests, and revisions are in
+`../../deliverables/Milestone6/PHASE7_TRIGGER_ROLLBACK_2026-11-05.md`.
 
 ## What the pipeline does
 
@@ -30,52 +35,26 @@ the gate **after** the new release passes health checks, so the automatic
 rollback path can be shown without intentionally shipping a broken app. Restore
 the substitution to `'0'` in a subsequent healthy commit.
 
-## Exact live setup still required
+## Live setup and evidence
 
-- Confirm that `https://github.com/chandrarup/Hush.git` is the team's intended
-  deployment remote and approve an exact branch. `milestone6-deploy` in the
-  YAML is a proposed branch; it did not exist on the remote when checked on
-  November 4, 2026. The current local branch is `codex/milestone5-gke`.
-- Grant the existing `hush-build` service account project-level
-  `roles/container.clusterViewer` for `container.clusters.get`, and
-  `roles/secretmanager.secretAccessor` on **only** `hush-team-token`.
-  Artifact Registry Writer and Logging Writer are already present. Confirm
-  access to the source bucket when configuring the trigger.
-- Apply `deployer-rbac.yaml` to the `hush` namespace using an administrator
-  identity. Its Role limits deployment changes to `deployment/hush` and grants
-  read access to ReplicaSets for `rollout undo`. Verify the build account's
-  effective permissions before enabling the trigger.
-- Connect the confirmed GitHub repo to Cloud Build if needed, then create one
-  push trigger for the exact branch with config path
-  `infra/milestone6/cloudbuild.yaml` and the `hush-build` service account.
-  Keep Cloud Logging as the build log destination. Avoid overlapping pushes
-  during the demonstration because two concurrent releases could race.
-- Save a successful build link, full commit SHA, image digest, rollout revision,
-  and public readiness result. Then push one controlled health-gate failure
-  commit, verify the failed build restores the old digest, and push a final
-  healthy commit. Keep Cloud SQL and infrastructure untouched in this test.
+The build account has project `roles/container.clusterViewer`, Artifact
+Registry Writer on the Hush repository, and Logging Writer. Its Secret Manager
+Accessor grant is scoped to `hush-team-token`. The applied namespace Role and
+RoleBinding grant deployment mutation for `deployment/hush` and read access to
+ReplicaSets for undo. Effective `kubectl auth can-i` checks passed. The trigger
+matches only `^milestone6-deploy$`; avoid overlapping release pushes because
+two deployments could race.
 
-The code has only been tested locally. Docker Desktop was unavailable, so no
-local container build or Cloud Build execution has been claimed. Local checks:
-`bash -n` passed for both scripts; YAML parsed; `uv run pytest -q` passed
-129 tests (6 pre-existing deprecation warnings). Four tests exercise the real
-deployment script against fake `gcloud`, `kubectl`, and `curl` commands for
-successful release, controlled failure, public readiness failure, and wrong
-branch rejection. `gcloud meta list-files-for-upload .` confirmed that the
-Cloud Build source includes the scripts and tests but excludes Terraform
-state/cache and observability definitions. A client-side Kubernetes dry run
-accepted `deployer-rbac.yaml`. The live Deployment's image, revision, and
-`HUSH_RELEASE_SHA` JSONPath expressions returned the expected values, and the
-public HTTPS `/ready` returned 200 with all managed checks true. These are
-read-only/local checks, not a Cloud Build rollout or rollback demonstration.
+The Cloud Build gate passed 45 headless tests in each of the three live runs.
+The full local suite passed 129 tests. The successful and failed builds,
+rollback verification, final external HTTPS readiness, and immutable image
+digests are recorded in the Phase 7 evidence file above.
 
 ## Cloud Build trigger reference
 
-After the repository and branch are confirmed, the trigger should match the
-exact branch (`^milestone6-deploy$` if the proposed name is accepted), use the
-team GitHub connection, and run under
+The trigger matches `^milestone6-deploy$`, uses the team GitHub connection, and runs under
 `hush-build@hush-milestone-2-20260922.iam.gserviceaccount.com`. Cloud Build
 sets `$COMMIT_SHA` and `$BRANCH_NAME` for push triggers. A manual source upload
 without those substitutions fails preflight by design. Review the trigger's
-source repository, branch regex, config path, and service account before the
-first push.
+source repository, branch regex, config path, and service account before later
+releases.

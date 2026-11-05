@@ -1,6 +1,6 @@
 # Hush Milestone 6: 50-point execution plan
 
-**Progress status (November 4, 2026):** Structured logging, live observability resources, and a manual logging release were validated in earlier phases. Terraform manages 18 imported existing resources and a live refreshed plan returned exit 0/no changes; its exceptions are documented in `infra/milestone6/terraform/README.md`. The Cloud Build pipeline and automatic rollback script now exist locally and pass local tests, but the build account permissions, branch trigger, successful/failed live runs, and final submission evidence remain pending. The supplied assignment text is the controlling Module 6 brief; no separate Module 6 file was found in this checkout.
+**Progress status (November 5, 2026):** The working artifacts are live: structured logging, the corrected 5xx metric, dashboard and alert, 18 imported Terraform resources with a refreshed no-change plan, and a GitHub branch triggered Cloud Build pipeline. A successful deployment, controlled failed build with verified automatic rollback, and final healthy deployment are recorded in `PHASE7_TRIGGER_ROLLBACK_2026-11-05.md`. The user will capture the console screenshots. Slides, the one-page analysis, and the demo plan are intentionally scheduled for the next phase. The supplied assignment text is the controlling Module 6 brief; no separate Module 6 file was found in this checkout.
 
 ## 1. Baseline and decisions
 
