@@ -1,0 +1,12 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/hush-containers/hush:m6-logging-20261103
+      - .
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/hush-containers/hush:m6-logging-20261103
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s

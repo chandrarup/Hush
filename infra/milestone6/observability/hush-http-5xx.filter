@@ -1,0 +1,9 @@
+resource.type="k8s_container"
+resource.labels.cluster_name="hush-m5"
+resource.labels.namespace_name="hush"
+resource.labels.container_name="hush"
+jsonPayload.event="http_request"
+jsonPayload.route!="/ready"
+jsonPayload.route!="/health"
+jsonPayload.status_code>=500
+jsonPayload.status_code<600

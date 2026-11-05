@@ -1,0 +1,65 @@
+substitutions:
+  _DEPLOY_BRANCH: milestone6-deploy
+  _FORCE_HEALTH_FAILURE: '0'
+
+steps:
+  - id: preflight
+    name: bash:5.2
+    entrypoint: bash
+    args: [infra/milestone6/preflight.sh]
+    env:
+      - HUSH_PROJECT=$PROJECT_ID
+      - HUSH_BRANCH=$BRANCH_NAME
+      - HUSH_EXPECTED_BRANCH=${_DEPLOY_BRANCH}
+      - HUSH_COMMIT_SHA=$COMMIT_SHA
+
+  - id: cloud-tests
+    name: python:3.12.12-slim-bookworm
+    entrypoint: bash
+    args:
+      - -euc
+      - |
+        apt-get update -qq
+        apt-get install -y -qq --no-install-recommends libgomp1 libportaudio2
+        python -m pip install --disable-pip-version-check --no-cache-dir uv==0.8.22
+        uv sync --frozen --group dev
+        uv run --frozen pytest -q \
+          tests/test_observability.py tests/test_managed_state.py \
+          tests/test_cloud_transcription.py tests/test_web_transcription_api.py \
+          tests/test_orchestration_probes.py tests/test_storage_paths.py \
+          tests/test_milestone6_pipeline.py
+    env:
+      - UV_PYTHON_DOWNLOADS=never
+      - UV_NO_PROGRESS=1
+
+  - id: build-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - us-central1-docker.pkg.dev/$PROJECT_ID/hush-containers/hush:$COMMIT_SHA
+      - .
+
+  - id: push-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - us-central1-docker.pkg.dev/$PROJECT_ID/hush-containers/hush:$COMMIT_SHA
+
+  - id: deploy-check-rollback
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args: [infra/milestone6/deploy_release.sh]
+    env:
+      - HUSH_PROJECT=$PROJECT_ID
+      - HUSH_BRANCH=$BRANCH_NAME
+      - HUSH_EXPECTED_BRANCH=${_DEPLOY_BRANCH}
+      - HUSH_COMMIT_SHA=$COMMIT_SHA
+      - HUSH_IMAGE_TAG=us-central1-docker.pkg.dev/$PROJECT_ID/hush-containers/hush:$COMMIT_SHA
+      - HUSH_FORCE_HEALTH_FAILURE=${_FORCE_HEALTH_FAILURE}
+      - CLOUDSDK_CORE_PROJECT=$PROJECT_ID
+      - KUBECONFIG=/tmp/hush-m6-kubeconfig
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 3600s
