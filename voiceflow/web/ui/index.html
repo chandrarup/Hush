@@ -615,6 +615,15 @@ function apiFetch(url, options = {}) {
   return fetch(url, {...options, headers});
 }
 
+function showHomeTop() {
+  const home = document.getElementById('page-home');
+  if (!home.classList.contains('active')) return;
+  requestAnimationFrame(() => {
+    home.scrollTop = 0;
+    window.scrollTo(0, 0);
+  });
+}
+
 // ── Theme ────────────────────────────────────────────────────────── //
 const THEME_STORAGE_KEY = 'voiceflow-theme';
 const themeToggle = document.getElementById('theme-toggle');
@@ -819,6 +828,7 @@ transcribeButton.addEventListener('click', async () => {
     if (!response.ok) throw new Error(payload.error || 'Transcription failed.');
     transcribeResult.textContent = payload.text || 'No speech detected.';
     await loadHome();
+    showHomeTop();
   } catch (error) {
     transcribeResult.classList.add('error');
     transcribeResult.textContent = error.message || 'Transcription failed.';
@@ -1167,6 +1177,7 @@ function handleServerEvent(event) {
   }
   if (event.type === 'final_transcript') {
     document.getElementById('live-transcript').textContent = event.text || 'No speech detected.';
+    showHomeTop();
   }
   if (event.type === 'session_error') {
     const transcript = document.getElementById('live-transcript');
@@ -1179,6 +1190,7 @@ function handleServerEvent(event) {
     // Prepend to live feed if on home
     if (document.getElementById('page-home').classList.contains('active')) {
       renderFeed(allEntries, document.getElementById('home-feed'), 30);
+      showHomeTop();
     }
   }
 }
