@@ -879,10 +879,18 @@ document.getElementById('search-input').addEventListener('input', e => {
 
 document.getElementById('btn-clear-all').addEventListener('click', async () => {
   if (!confirm('Delete all transcription history?')) return;
-  await apiFetch(API+'/history', {method:'DELETE'});
-  allEntries = [];
-  renderHistory([]);
-  loadHome();
+  try {
+    const response = await apiFetch(API+'/history', {method:'DELETE'});
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `Delete failed (HTTP ${response.status}).`);
+    }
+    allEntries = [];
+    renderHistory([]);
+    await loadHome();
+  } catch (error) {
+    alert(error.message || 'Could not delete history.');
+  }
 });
 
 // ── Snippets ────────────────────────────────────────────────────── //
@@ -1003,12 +1011,23 @@ async function removeSnippet(index, version) {
 }
 
 async function deleteEntry(id, btn) {
-  await apiFetch(API+'/history/'+id, {method:'DELETE'});
-  const card = btn.closest('.entry-card');
-  card.style.opacity = '0';
-  card.style.transition = 'opacity .2s';
-  setTimeout(() => card.remove(), 200);
-  allEntries = allEntries.filter(e => e.id !== id);
+  btn.disabled = true;
+  try {
+    const response = await apiFetch(API+'/history/'+id, {method:'DELETE'});
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `Delete failed (HTTP ${response.status}).`);
+    }
+    const card = btn.closest('.entry-card');
+    card.style.opacity = '0';
+    card.style.transition = 'opacity .2s';
+    setTimeout(() => card.remove(), 200);
+    allEntries = allEntries.filter(e => e.id !== id);
+  } catch (error) {
+    alert(error.message || 'Could not delete this entry.');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function copyText(text) {
