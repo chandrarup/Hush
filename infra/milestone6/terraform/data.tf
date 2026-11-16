@@ -3,6 +3,7 @@ resource "google_sql_database_instance" "hush" {
   region              = var.region
   name                = "hush-postgres-m4"
   database_version    = "POSTGRES_15"
+  depends_on          = [google_service_networking_connection.private_services]
   deletion_protection = true
 
   settings {
