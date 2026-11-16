@@ -1,0 +1,5 @@
+NAME                    READY   STATUS    RESTARTS   AGE     IP            NODE                                     NOMINATED NODE   READINESS GATES
+hush-79c8b8dd7f-b6qmb   1/1     Running   0          103s    10.30.0.10    gk3-hush-m5-nap-3dra60n3-2b1b5259-jt7c   <none>           1/1
+hush-79c8b8dd7f-mksmc   1/1     Running   0          3m56s   10.30.0.7     gk3-hush-m5-nap-3dra60n3-2b1b5259-jt7c   <none>           1/1
+hush-79c8b8dd7f-w2xlc   1/1     Running   0          2m43s   10.30.0.9     gk3-hush-m5-nap-3dra60n3-2b1b5259-jt7c   <none>           1/1
+hush-79c8b8dd7f-zrq7h   1/1     Running   0          90m     10.30.0.137   gk3-hush-m5-nap-1g4x1k19-e3226f15-8rfj   <none>           1/1

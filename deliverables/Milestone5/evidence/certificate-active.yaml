@@ -1,0 +1,22 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"networking.gke.io/v1","kind":"ManagedCertificate","metadata":{"annotations":{},"name":"hush-cert-nip","namespace":"hush"},"spec":{"domains":["hush.34.36.104.111.nip.io"]}}
+  creationTimestamp: "2026-10-23T02:36:03Z"
+  generation: 3
+  name: hush-cert-nip
+  namespace: hush
+  resourceVersion: "1792723340719807000"
+  uid: 6f05a6de-10ce-42e0-8052-8b2f7394c297
+spec:
+  domains:
+  - hush.34.36.104.111.nip.io
+status:
+  certificateName: mcrt-fc66f5c5-065f-4592-ae83-f32c8d9b2aaa
+  certificateStatus: Active
+  domainStatus:
+  - domain: hush.34.36.104.111.nip.io
+    status: Active
+  expireTime: "2027-01-20T18:36:05.000-08:00"
