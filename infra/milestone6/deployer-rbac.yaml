@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hush-release-deployer
+  namespace: hush
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [hush]
+    verbs: [get, patch, update, watch]
+  - apiGroups: [apps]
+    resources: [replicasets]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hush-release-deployer
+  namespace: hush
+subjects:
+  - kind: User
+    name: hush-build@hush-milestone-2-20260922.iam.gserviceaccount.com
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: hush-release-deployer
+  apiGroup: rbac.authorization.k8s.io

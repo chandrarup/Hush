@@ -18,6 +18,7 @@ Serves:
 """
 
 import asyncio
+from datetime import datetime, timezone
 import hmac
 import io
 import json
@@ -38,6 +39,7 @@ try:
     from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
     from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
     from fastapi.staticfiles import StaticFiles
+    from starlette.routing import Match
     import uvicorn
     _FASTAPI_OK = True
 except ImportError:
@@ -412,6 +414,42 @@ if _FASTAPI_OK:
                 return JSONResponse({"error": "Cross-origin request rejected."}, status_code=403)
         return await call_next(request)
 
+    @app.middleware("http")
+    async def _log_http_request(request: Request, call_next):
+        """Write one safe, structured result for each HTTP request."""
+        started = time.monotonic()
+        request_id = uuid.uuid4().hex
+        status_code = 500
+        error_class = None
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Request-ID"] = request_id
+            return response
+        except Exception as exc:
+            error_class = type(exc).__name__
+            raise
+        finally:
+            route = next(
+                (candidate.path for candidate in app.routes
+                 if candidate.matches(request.scope)[0] == Match.FULL),
+                "<unmatched>",
+            )
+            record = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "severity": "ERROR" if status_code >= 500 else "INFO",
+                "event": "http_request",
+                "method": request.method,
+                "route": route,
+                "status_code": status_code,
+                "duration_ms": round((time.monotonic() - started) * 1000, 2),
+                "request_id": request_id,
+                "release_sha": os.getenv("HUSH_RELEASE_SHA", "unknown"),
+            }
+            if error_class:
+                record["error_class"] = error_class
+            print(json.dumps(record, separators=(",", ":")), flush=True)
+
     @app.on_event("startup")
     async def _startup():
         global _event_loop, _managed_startup_error
@@ -468,6 +506,15 @@ if _FASTAPI_OK:
     async def get_health():
         return {"status": "ok"}
 
+    @app.get("/internal/demo-error")
+    async def demo_error(request: Request):
+        """A disabled-by-default, authenticated 5xx for observability demos."""
+        if os.getenv("HUSH_ENABLE_DEMO_ERROR") != "1" or not _team_token():
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        if not _token_matches(_request_token(request)):
+            return JSONResponse({"error": "Invalid or missing team token."}, status_code=401)
+        return JSONResponse({"error": "Controlled demonstration error"}, status_code=503)
+
     @app.get("/ready")
     async def get_readiness():
         """Report whether every required managed dependency is usable."""
@@ -479,14 +526,15 @@ if _FASTAPI_OK:
                 status_code=503,
             )
         if not managed_state_enabled():
-            return {"status": "ready", "mode": "local"}
+            return {"status": "ready", "mode": "local", "release_sha": os.getenv("HUSH_RELEASE_SHA", "unknown")}
         checks = await asyncio.to_thread(get_managed_state().check_ready)
         checks["model"] = os.getenv("HUSH_WARM_MODEL") != "1" or _web_transcriber is not None
         if not all(checks.values()):
             return JSONResponse(
                 {"status": "not-ready", "checks": checks}, status_code=503
             )
-        return {"status": "ready", "mode": "managed", "checks": checks}
+        return {"status": "ready", "mode": "managed", "checks": checks,
+                "release_sha": os.getenv("HUSH_RELEASE_SHA", "unknown")}
 
     @app.get("/history")
     async def get_history(limit: int = 200, offset: int = 0):

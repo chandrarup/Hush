@@ -1,0 +1,31 @@
+{
+  "displayName": "Hush HTTP 5xx detected",
+  "combiner": "OR",
+  "conditions": [
+    {
+      "displayName": "At least one Hush HTTP 5xx in 15 minutes",
+      "conditionThreshold": {
+        "filter": "metric.type=\"logging.googleapis.com/user/hush_http_5xx_count\" AND resource.type=\"k8s_container\" AND resource.labels.cluster_name=\"hush-m5\" AND resource.labels.namespace_name=\"hush\" AND resource.labels.container_name=\"hush\"",
+        "comparison": "COMPARISON_GT",
+        "thresholdValue": 0,
+        "duration": "0s",
+        "aggregations": [
+          {
+            "alignmentPeriod": "900s",
+            "perSeriesAligner": "ALIGN_SUM",
+            "crossSeriesReducer": "REDUCE_SUM"
+          }
+        ],
+        "trigger": {"count": 1}
+      }
+    }
+  ],
+  "documentation": {
+    "content": "Hush emitted an HTTP 5xx response. Check the Hush Milestone 6 dashboard and Logging metric hush_http_5xx_count, identify the request ID and release SHA, then inspect the application rollout. If this follows a deploy, verify public HTTPS /ready and the authenticated smoke path before deciding whether to roll back.",
+    "mimeType": "text/markdown"
+  },
+  "enabled": true,
+  "notificationChannels": [
+    "projects/hush-milestone-2-20260922/notificationChannels/13870997164893634747"
+  ]
+}

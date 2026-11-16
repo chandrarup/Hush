@@ -1,0 +1,85 @@
+{
+  "name": "projects/278368955479/dashboards/38d27e5c-dda9-416a-9e83-15def61fafbb",
+  "etag": "4657c1d8ff929dc077450a6b2e01026c",
+  "displayName": "Hush Milestone 6",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "width": 48,
+        "height": 16,
+        "widget": {
+          "title": "Hush HTTP 5xx requests (count per minute)",
+          "xyChart": {
+            "dataSets": [{
+              "plotType": "LINE",
+              "targetAxis": "Y1",
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"logging.googleapis.com/user/hush_http_5xx_count\" resource.type=\"k8s_container\" resource.label.\"cluster_name\"=\"hush-m5\" resource.label.\"namespace_name\"=\"hush\" resource.label.\"container_name\"=\"hush\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_SUM",
+                    "crossSeriesReducer": "REDUCE_SUM"
+                  }
+                }
+              }
+            }],
+            "yAxis": {"label": "requests", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "yPos": 16,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Hush container CPU limit utilization",
+          "xyChart": {
+            "dataSets": [{
+              "plotType": "LINE",
+              "targetAxis": "Y1",
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"kubernetes.io/container/cpu/limit_utilization\" resource.type=\"k8s_container\" resource.label.\"cluster_name\"=\"hush-m5\" resource.label.\"namespace_name\"=\"hush\" resource.label.\"container_name\"=\"hush\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_MEAN",
+                    "crossSeriesReducer": "REDUCE_MEAN"
+                  }
+                }
+              }
+            }],
+            "yAxis": {"label": "fraction of CPU limit", "scale": "LINEAR"}
+          }
+        }
+      },
+      {
+        "xPos": 24,
+        "yPos": 16,
+        "width": 24,
+        "height": 16,
+        "widget": {
+          "title": "Hush container memory used",
+          "xyChart": {
+            "dataSets": [{
+              "plotType": "LINE",
+              "targetAxis": "Y1",
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"kubernetes.io/container/memory/used_bytes\" resource.type=\"k8s_container\" resource.label.\"cluster_name\"=\"hush-m5\" resource.label.\"namespace_name\"=\"hush\" resource.label.\"container_name\"=\"hush\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_MEAN",
+                    "crossSeriesReducer": "REDUCE_SUM"
+                  }
+                }
+              }
+            }],
+            "yAxis": {"label": "bytes", "scale": "LINEAR"}
+          }
+        }
+      }
+    ]
+  }
+}

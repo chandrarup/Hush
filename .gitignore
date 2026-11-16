@@ -62,3 +62,21 @@ scratch/
 .codex-artifacts/
 deliverables/Milestone4/.build/
 .playwright-mcp/
+
+# Terraform local cache, state, plans and private variables
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/terraform.tfvars
+**/terraform.tfvars.json
+**/*.auto.tfvars
+**/*.auto.tfvars.json
+**/.terraform.tfstate.lock.info
+
+# Local coursework submissions, generated evidence, and rollback snapshots
+/deliverables/
+/output/
+/.local-backups/
+*.ppt
+*.pptx
