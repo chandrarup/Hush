@@ -13,7 +13,7 @@ The import-only saved plan was inspected before applying: 18 imports, zero
 creates, updates, or destroys. The import completed on November 4, 2026. A
 fresh `terraform plan -refresh=true -detailed-exitcode -no-color` returned
 exit 0 and `No changes. Your infrastructure matches the configuration.` The
-full output is in `deliverables/Milestone6/evidence/terraform-no-change-2026-11-04.txt`.
+full output is in the locally retained milestone evidence (excluded from GitHub).
 
 ## Ownership boundaries and exceptions
 

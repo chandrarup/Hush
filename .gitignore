@@ -73,3 +73,10 @@ deliverables/Milestone4/.build/
 **/*.auto.tfvars
 **/*.auto.tfvars.json
 **/.terraform.tfstate.lock.info
+
+# Local coursework submissions, generated evidence, and rollback snapshots
+/deliverables/
+/output/
+/.local-backups/
+*.ppt
+*.pptx

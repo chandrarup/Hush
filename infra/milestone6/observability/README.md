@@ -1,6 +1,6 @@
 # Milestone 6 observability — live resource record
 
-Created in project `hush-milestone-2-20260922` on November 3, 2026. The subsequent manual release produced a parsed application 503 log, and the team confirmed receiving an alert email. See `deliverables/Milestone6/PHASE4_LIVE_VALIDATION_2026-11-03.md` for the dated validation and its limits.
+Created in project `hush-milestone-2-20260922` on November 3, 2026. The subsequent manual release produced a parsed application 503 log, and the team confirmed receiving an alert email. See the locally retained milestone evidence (excluded from GitHub) for the dated validation and its limits.
 
 | Resource | Cloud identifier | Source definition |
 | --- | --- | --- |

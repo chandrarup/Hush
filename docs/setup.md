@@ -98,7 +98,7 @@ Notes:
 ## 4. Prepare The Hush VM
 
 Deploy the repository to the restricted GCP VM using
-[`deliverables/Hush_Milestone2_Runbook.md`](../deliverables/Hush_Milestone2_Runbook.md).
+[GKE operator guide](../infra/milestone5/README.md).
 The VM service must have `HUSH_TEAM_TOKEN` set in `/etc/hush.env`. Whisper,
 cleanup, snippets, the dashboard, and SQLite history all run on that VM.
 

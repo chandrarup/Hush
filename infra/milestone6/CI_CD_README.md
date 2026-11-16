@@ -8,7 +8,7 @@ owner's `hush-github-owner` connection. It reads this YAML and runs as
 2026, a normal push succeeded, a controlled failure invoked and verified
 automatic rollback, and a healthy follow-up push succeeded. Exact run IDs,
 digests, and revisions are in
-`../../deliverables/Milestone6/PHASE7_TRIGGER_ROLLBACK_2026-11-05.md`.
+the locally retained milestone evidence (excluded from GitHub).
 
 ## What the pipeline does
 
