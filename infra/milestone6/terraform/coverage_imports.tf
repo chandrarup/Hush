@@ -313,4 +313,3 @@ import {
   to = google_cloudbuild_trigger.deploy
   id = "projects/hush-milestone-2-20260922/locations/us-central1/triggers/868940d9-816c-454a-bd76-475c26a8dcad"
 }
-
