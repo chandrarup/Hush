@@ -1,64 +1,77 @@
-# Milestone 6 Terraform — imported infrastructure
+# Hush Terraform
 
-This directory defines and has imported **18 existing resources**: GKE, VPC,
-subnet, reserved IP, Artifact Registry, Cloud SQL instance and application
-database, two application buckets, three team service accounts, two Secret
-Manager containers, and four observability resources. Their IDs are in
-`imports.tf` and `infrastructure_imports.tf`. The observability definitions
-refer to the saved live JSON/filter files in `../observability/`. The channel
-recipient is supplied privately through `TF_VAR_alert_email`; Terraform state
-still contains the address and Cloud SQL certificate metadata.
+This module manages **81 existing resources** in the Hush project. On November
+16, 2026, it adopted 63 dependencies missing from the original 18-resource
+Milestone 6 configuration. Adoption imported existing objects; it did not
+recreate infrastructure or change access, credentials, budgets, or deployment.
 
-The import-only saved plan was inspected before applying: 18 imports, zero
-creates, updates, or destroys. The import completed on November 4, 2026. A
-fresh `terraform plan -refresh=true -detailed-exitcode -no-color` returned
-exit 0 and `No changes. Your infrastructure matches the configuration.` The
-full output is in the locally retained milestone evidence (excluded from GitHub).
+| Coverage | Resources | Configuration |
+|---|---:|---|
+| Original infrastructure and observability | 18 | `network.tf`, `platform.tf`, `data.tf`, `observability.tf` |
+| Enabled project APIs | 41 | `services.tf` |
+| Application IAM grants | 14 | `iam.tf` |
+| Private-service range and connection; SQL application user | 3 | `dependencies.tf` |
+| Existing monthly and milestone-period budgets | 2 | `billing.tf` |
+| GitHub connection, repository, and deployment trigger | 3 | `build.tf` |
 
-## Ownership boundaries and exceptions
+Import IDs are retained in `imports.tf`, `infrastructure_imports.tf`, and
+`coverage_imports.tf`. The enabled-service inventory includes pre-existing
+Google/project defaults as well as application APIs; adoption does not imply
+that Hush uses BigQuery or every other enabled service. API resources use
+`disable_on_destroy = false`, and all new resources have `prevent_destroy`.
+Application IAM uses additive member resources, never authoritative policies.
 
-| Owner | Resources or fields |
-| --- | --- |
-| This Terraform module | The 18 resources listed above, with settings in `.tf` files. All have `prevent_destroy`. |
-| Separate bootstrap | `hush-milestone-2-20260922-tfstate` bucket. State cannot safely manage its own backend bucket in this module. |
-| Kubernetes and GKE controllers | Namespace, Deployment, HPA, Service, Ingress, certificates, BackendConfig, PDB, and GKE-created load-balancer objects. Versioned Kubernetes manifests remain under `infra/milestone5/`; the later pipeline will manage releases. |
-| Application/pipeline | Image digest and release SHA; HPA controls application replica scaling. |
-| Existing operators and services | SQL `hush_app` user/password, secret **versions**, project and resource IAM grants, private services access, enabled project APIs, and the Cloud Build default bucket. These are inventoried or pending inventory, not claimed as Terraform-managed. |
+## Credentials and state
 
-The GKE and `hush-team-token` labels are present in the API's effective labels
-but were not returned as Terraform-owned labels at import. The module leaves
-those labels outside its ownership to preserve the zero-change plan. Review
-that choice if the rubric requires exact label ownership. IAM and private
-services access are the next Terraform coverage decisions; use narrow IAM
-member resources rather than authoritative project-wide policies.
-
-## Safe validation
-
-The backend block is intentionally partial so no bucket name or credential is
-hardcoded into the module. The dedicated bucket
-`hush-milestone-2-20260922-tfstate` now exists with versioning, soft delete,
-uniform access, and public access prevention. Its direct viewer/editor
-convenience grants were removed. The current project IAM readback shows only
-the active operator as Owner, with no project Viewer/Editor grants. Local ADC
-was established through the standard Google login flow. Do not commit ADC or
-state files. Review every future plan before applying it.
-Never commit state, plans, `.terraform/`, or a recipient tfvars file.
+Use operator Application Default Credentials with access to the project,
+remote state, and billing budgets. The `google.billing` provider alias explicitly
+uses Hush as its quota project because the Billing Budgets API requires it for
+user ADC. No credentials or private variable files belong in Git.
 
 ```bash
 cd infra/milestone6/terraform
-export TF_VAR_alert_email='<existing recipient, supplied privately>'
-terraform fmt -check
+export TF_VAR_alert_email='<existing monitoring-channel recipient>'
 terraform init -backend-config='bucket=hush-milestone-2-20260922-tfstate' \
   -backend-config='prefix=milestone6/terraform'
+terraform fmt -check
 terraform validate
 terraform plan -refresh=true -detailed-exitcode -no-color
 ```
 
-The November 4 import plan showed 18 imports with no other actions. The
-subsequent refreshed plan returned exit 0. Repeat this gate after future
-Terraform changes and after the CI/CD trigger exists. `terraform init
--backend=false` is only for local schema validation, not live state work.
+Terraform 1.5+ and the pinned Google provider 8.4.0 are required. Review saved
+plans before applying; do not use an old plan after changing configuration.
+A no-change plan proves agreement only for the declared scope. Use the
+[coverage and validation record](COVERAGE.md) to assess completeness.
 
-The Cloud Asset API is currently disabled in this project; use individual
-read-only `gcloud ... describe/list` inventory calls unless the team decides
-to enable that API. No API enablement is needed for this checkpoint.
+## Ownership boundaries
+
+- **This module:** the 81 resources above, including application runtime/build/
+  node project grants, bucket/registry/secret grants, and Workload Identity.
+- **Credentials:** SQL `hush_app` identity is managed, but its existing password
+  is not read, reset, or stored in configuration. Password rotation and secret
+  versions remain a coordinated operator procedure in Secret Manager. The
+  GitHub OAuth credential is referenced by secret-version resource name only;
+  the GitHub owner controls authorization and installation consent.
+- **Google-managed identities:** Google service-agent and legacy convenience
+  grants remain owned by Google/platform administration. Human project roles
+  remain operator-managed; this module does not adopt Owner or elevate access.
+- **Kubernetes:** versioned manifests under `infra/milestone5` and
+  `infra/milestone6/deployer-rbac.yaml` own workloads and namespace RBAC.
+  Controllers own generated load-balancer objects; the pipeline owns release
+  digest/SHA, and the HPA owns scaling. Do not manage the same objects twice.
+- **Bootstrap:** the protected remote-state bucket is separately bootstrapped.
+  Google-created default build buckets, backend bucket grants, and unrelated
+  legacy/retained VM resources are outside this dependency-adoption change.
+
+The $50 monthly budget excludes credits and retains 20%, 50%, and 100% spend
+alerts with project-level recipients. The separate $100 October 22–December 6
+milestone budget retains its existing thresholds and credit treatment. Alerts
+warn about spend; neither budget stops compute or imposes a spending cap.
+
+The build trigger intentionally continues to match `^milestone6-deploy$` and
+uses `infra/milestone6/cloudbuild.yaml`. Merging Terraform changes to `main`
+does not deploy application code or change the trigger branch.
+
+Remote state contains private monitoring-channel and infrastructure metadata.
+Do not publish state, plan JSON, `.terraform`, raw audit inventories, or secret
+payloads. Sanitized validation summaries are sufficient for review.

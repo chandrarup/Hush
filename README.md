@@ -61,11 +61,11 @@ These summarize repository artifacts and saved evidence, not a fresh live cloud 
 | Milestone | Work performed and completed | Remaining |
 |---|---|---|
 | 1 | Project proposal, voice-to-text workflow, and architecture design. | Final product polish. |
-| 2 | GCP project, budget setup, networking, VM, and initial deployment workflow. | Bring retained resources under Terraform. |
+| 2 | GCP project, budget setup, networking, VM, and initial deployment workflow. | Reported dependency gaps now adopted into Terraform. |
 | 3 | Containerized application, versioned images, and deployment/demo documentation. | Release installation verification. |
-| 4 | Private Cloud SQL, recording storage, Secret Manager, keyless runtime, and data migration. | Reconcile unmanaged dependencies. |
+| 4 | Private Cloud SQL, recording storage, Secret Manager, keyless runtime, and data migration. | Application dependencies now adopted; credential rotation remains operator-owned. |
 | 5 | GKE Autopilot, HTTPS ingress, durable-state integration, and scaling/demo evidence. | Repeat end-to-end demo validation. |
-| 6 | Monitoring, alerts, Terraform for 18 resources, branch-triggered builds, health gates, and demonstrated rollback. | Full Terraform coverage, including budget, trigger, IAM, APIs, private service access, and SQL user. |
+| 6 | Monitoring, alerts, Terraform for 81 resources, branch-triggered builds, health gates, and demonstrated rollback. | Dependency adoption completed; see [Terraform coverage](infra/milestone6/terraform/COVERAGE.md). Individual sign-in remains planned. |
 
 ## Further instructions
 

@@ -63,3 +63,7 @@ These decisions supersede conflicting alternatives earlier in this planning docu
 - Preserve a reconciled pre-authentication GitHub baseline without milestone deliverables before implementation. Next: isolated identity feasibility prototype and hosting estimate; reconcile infrastructure before production authentication changes.
 
 Compatibility acceptance: an invited Google account can authenticate in browser and return securely to the desktop; an uninvited account cannot obtain application access; server sessions enforce the 24-hour boundary and revocation. Use scratch data, never migrate production data during the prototype.
+
+## Terraform feedback completed — November 16, 2026
+
+Phase 1 dependency adoption is complete for the reported gaps: 63 existing resources imported, 81 managed total, no infrastructure mutations, and a refreshed no-change plan. See [verified coverage](../infra/milestone6/terraform/COVERAGE.md). This supersedes earlier statements that application IAM, private service access, SQL user, APIs, budgets, or the build trigger are unmanaged. Authentication and other product work remain pending.
